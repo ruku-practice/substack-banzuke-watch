@@ -179,7 +179,7 @@ function renderRanking() {
     const host = p.host ? `<span class="host">${esc(p.host)}</span>` : "";
     const c = (key) => "c-" + key + (key === sortKey ? " is-sorted" : "");
     return `<tr class="medal-${idx}">
-      <td class="col-idx">${idx}</td>
+      <td class="col-idx"><span class="rank-num">${idx}</span></td>
       <td class="col-avatar">${avatarHtml(p)}</td>
       <td class="col-name ${"name" === sortKey ? "is-sorted" : ""}">${link}${host}</td>
       <td class="${c("days")}">${p.days}</td>

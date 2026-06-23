@@ -8,26 +8,38 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#f0640f">
+<meta property="og:title" content="Substack番付 つみあげウォッチ">
+<meta property="og:description" content="Substack番付の日々のTOP30を“つみあげ”集計。続けて伸びている書き手が一目で分かる非公式スタッツ。">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Zen+Old+Mincho:wght@600;700;900&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="site-header">
-  <div class="wrap">
-    <h1 class="site-title"><img class="title-icon" src="icon.png" alt="" width="40" height="40">Substack番付 <span class="accent">つみあげウォッチ</span></h1>
-    <p class="tagline">番付の“その日”を、“つみあげ”で見る。— <a href="https://substackbanzuke.com/" target="_blank" rel="noopener">Substack番付</a>の非公式スタッツ</p>
+<header class="hero">
+  <div class="wrap hero-inner">
+    <div class="hero-brand">
+      <img class="hero-icon" src="icon.png" alt="" width="56" height="56">
+      <div class="hero-brand-text">
+        <p class="kicker">SUBSTACK BANZUKE · 非公式スタッツ</p>
+        <h1 class="hero-title">Substack番付<span class="accent">つみあげウォッチ</span></h1>
+      </div>
+    </div>
+    <p class="hero-lead">番付の“その日”を、“つみあげ”で。<a href="https://substackbanzuke.com/" target="_blank" rel="noopener">Substack番付</a>の日々のTOP30を累積し、<b>続けて伸びている書き手</b>を発行元別に見える化します。</p>
     <ul class="pitch">
-      <li>📈 <b>書く人へ</b>：自分や憧れの書き手が、通算でどれだけ上位常連かが分かる</li>
-      <li>🔎 <b>読む人へ</b>：継続的に良い記事を出している書き手を見つけてフォローできる</li>
+      <li><span class="pitch-ic">✍️</span><span><b>書く人へ</b>自分や憧れの書き手が、通算でどれだけ上位常連かが分かる</span></li>
+      <li><span class="pitch-ic">🔍</span><span><b>読む人へ</b>継続的に良い記事を出している書き手を見つけてフォローできる</span></li>
     </ul>
+    <div class="meta-bar" id="metaBar"></div>
   </div>
 </header>
 
 <main class="wrap">
-  <section class="meta-bar" id="metaBar"></section>
-
   <nav class="tabs" id="viewTabs">
-    <button class="tab is-active" data-view="ranking">発行元ランキング</button>
-    <button class="tab" data-view="trends">番付トレンド</button>
+    <button class="tab is-active" data-view="ranking"><span class="tab-no">壱</span>発行元ランキング</button>
+    <button class="tab" data-view="trends"><span class="tab-no">弐</span>番付トレンド</button>
   </nav>
 
   <!-- ランキングビュー -->
