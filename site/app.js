@@ -9,6 +9,7 @@ let activePeriodKey = "cumulative";
 let sortKey = "top10";
 let sortDir = "desc"; // desc | asc
 let searchTerm = "";
+let renderedPublishers = [];
 const RUKU_HOST = "rukupractice.substack.com";
 const DETAIL_PARAM = "p";
 
@@ -152,6 +153,7 @@ function bindEvents() {
     clearTimeout(t);
     t = setTimeout(() => { searchTerm = e.target.value.trim().toLowerCase(); renderRanking(); }, 120);
   });
+  $("#csvExport").addEventListener("click", exportCsv);
 }
 
 function currentPeriod() {
@@ -204,6 +206,7 @@ function renderRanking() {
       (p.host || "").toLowerCase().includes(searchTerm));
   }
   list = sortPublishers(list);
+  renderedPublishers = list;
   renderScorePanel(period, list);
 
   // header sort indicator
@@ -270,6 +273,7 @@ function scoreHtml(p, period, compact = false) {
     <div class="score-copy">
       <b>${esc(label)}</b>
       <span>${esc(period.label)}でTop10回数 ${s.top10Rank}位。登場日のTop10率 ${s.top10Rate}%、番付への継続登場率 ${s.continuity}%。</span>
+      <small>算出: Top10回数の相対順位 + 登場継続率 + 平均順位</small>
     </div>
   </div>`;
 }
@@ -324,6 +328,57 @@ function renderTrends() {
     "<tbody>" + cats.map((c) =>
       `<tr><td style="text-align:left">${esc(c.category)}</td><td>${c.top10}</td><td>${c.top3}</td><td>${c.entries}</td><td>${c.avg_attention}</td></tr>`
     ).join("") + "</tbody>";
+
+  renderRisers();
+}
+
+function renderRisers() {
+  const last7 = DATA.periods.find((p) => p.key === "last7");
+  const cumulative = DATA.periods.find((p) => p.key === "cumulative") || DATA.periods[0];
+  if (!last7 || !cumulative) return;
+  const rankByTop10 = (list) => list.slice().sort((a, b) =>
+    (b.top10 - a.top10) || (b.top3 - a.top3) || (a.avg_rank - b.avg_rank) || tieBreak(a, b));
+  const cumRank = {};
+  rankByTop10(cumulative.publishers).forEach((p, i) => { cumRank[p.host] = i + 1; });
+  const risers = rankByTop10(last7.publishers)
+    .map((p, i) => {
+      const cRank = cumRank[p.host] || cumulative.publishers.length + 1;
+      return { ...p, recent_rank: i + 1, cumulative_rank: cRank, rise: cRank - (i + 1) };
+    })
+    .filter((p) => p.top10 > 0 && p.rise > 0)
+    .sort((a, b) => (b.rise - a.rise) || (b.top10 - a.top10) || tieBreak(a, b))
+    .slice(0, 12);
+  $("#riserTable").innerHTML =
+    `<thead><tr><th style="text-align:left">発行元</th><th>7日順位</th><th>累積順位</th><th>上昇</th><th>Top10</th></tr></thead>` +
+    "<tbody>" + risers.map((p) =>
+      `<tr class="row-click" data-host="${esc(p.host)}"><td style="text-align:left"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a><span class="host">${esc(p.host)}</span></td><td>${p.recent_rank}</td><td>${p.cumulative_rank}</td><td>+${p.rise}</td><td>${p.top10}</td></tr>`
+    ).join("") + "</tbody>";
+  $("#riserTable").querySelectorAll("tr[data-host]").forEach((tr) =>
+    tr.addEventListener("click", (e) => { if (!e.target.closest("a")) openDetail(tr.dataset.host); }));
+}
+
+function csvCell(v) {
+  const s = String(v == null ? "" : v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function exportCsv() {
+  const period = currentPeriod();
+  const header = ["rank", "name", "host", "days", "top1", "top3", "top10", "avg_rank", "avg_attention", "avg_likes", "avg_restacks", "avg_comments", "url"];
+  const rows = renderedPublishers.map((p, i) => [
+    i + 1, p.name, p.host, p.days, p.top1, p.top3, p.top10, p.avg_rank,
+    p.avg_attention, p.avg_likes, p.avg_restacks, p.avg_comments, p.url,
+  ]);
+  const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `banzuke-${period.key}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 /* ── 発行元 詳細モーダル ─────────────────────────────── */

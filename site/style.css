@@ -153,6 +153,12 @@ main { padding-bottom: 8px; }
 }
 #searchBox::placeholder { color: var(--ink-3); }
 #searchBox:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+.export-btn {
+  appearance: none; cursor: pointer; font: inherit; font-size: .78rem; font-weight: 700;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink-2);
+  padding: 7px 13px; border-radius: var(--r-pill); box-shadow: var(--shadow-sm);
+}
+.export-btn:hover { border-color: var(--accent); color: var(--accent-2); }
 .period-note { font-size: .76rem; color: var(--ink-3); margin: 2px 0 12px; letter-spacing: .02em; }
 
 /* ── テーブル ─────────────────────────────────────────── */
@@ -213,6 +219,7 @@ main { padding-bottom: 8px; }
 .col-name a { font-weight: 700; color: var(--ink); }
 .col-name a:hover { color: var(--accent-2); }
 .col-name .host { display: block; font-size: .68rem; color: var(--ink-3); font-weight: 400; margin-top: 1px; }
+.rank-table .host { display: block; font-size: .68rem; color: var(--ink-3); font-weight: 400; margin-top: 1px; }
 .num.hot, td.hot { color: var(--accent-2); font-weight: 700; }
 
 /* ソート中の列ハイライト */
@@ -269,6 +276,7 @@ main { padding-bottom: 8px; }
 .score-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .score-copy b { font-family: var(--font-serif); font-size: 1.02rem; color: var(--ink); }
 .score-copy span { font-size: .78rem; color: var(--ink-2); line-height: 1.6; }
+.score-copy small { font-size: .68rem; color: var(--ink-3); line-height: 1.5; }
 
 /* ── トレンド ─────────────────────────────────────────── */
 .trend-grid { display: grid; gap: 16px; }

@@ -50,6 +50,7 @@
       <div class="search-wrap">
         <input type="search" id="searchBox" placeholder="発行元を検索…" autocomplete="off">
       </div>
+      <button class="export-btn" id="csvExport" type="button">CSV</button>
     </div>
     <p class="period-note" id="periodNote"></p>
     <div class="score-panel" id="scorePanel" hidden></div>
@@ -101,6 +102,13 @@
         <p class="card-note">どのジャンルの記事が番付上位に多いか。</p>
         <div class="table-scroll">
           <table class="rank-table compact" id="catTable"></table>
+        </div>
+      </div>
+      <div class="card">
+        <h3>急上昇発行元</h3>
+        <p class="card-note">直近7日のTop10入りが強く、累積順位より上に来ている発行元。</p>
+        <div class="table-scroll">
+          <table class="rank-table compact" id="riserTable"></table>
         </div>
       </div>
     </div>
