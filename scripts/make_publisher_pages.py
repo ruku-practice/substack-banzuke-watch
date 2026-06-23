@@ -185,16 +185,20 @@ STUB = """<!DOCTYPE html><html lang="ja"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{name}｜Substack番付 つみあげウォッチ</title>
 <meta name="description" content="{desc}">
-<meta property="og:type" content="profile">
+<meta property="og:site_name" content="Substack番付 つみあげウォッチ">
+<meta property="og:type" content="website">
 <meta property="og:title" content="{ogtitle}">
 <meta property="og:description" content="{desc}">
 <meta property="og:image" content="{base}/cards/{host}.png">
+<meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="{ogtitle}">
 <meta property="og:url" content="{base}/p/{host}/">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{ogtitle}">
 <meta name="twitter:description" content="{desc}">
 <meta name="twitter:image" content="{base}/cards/{host}.png">
+<meta name="twitter:image:alt" content="{ogtitle}">
 <link rel="icon" href="{base}/favicon-32.png">
 <script>location.replace("{base}/?p={host}#ranking");</script>
 </head><body style="font-family:sans-serif;padding:24px">
