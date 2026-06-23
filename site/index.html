@@ -103,6 +103,26 @@
         <div class="table-scroll">
           <table class="rank-table compact" id="catTable"></table>
         </div>
+        <div class="category-detail" id="categoryDetail" hidden></div>
+      </div>
+      <div class="card">
+        <h3>発行元比較</h3>
+        <p class="card-note">2つの発行元を選ぶと、順位推移と主要指標を並べて見比べられます。</p>
+        <div class="compare-controls">
+          <select id="compareA" aria-label="比較対象A"></select>
+          <select id="compareB" aria-label="比較対象B"></select>
+        </div>
+        <div class="compare-summary" id="compareSummary"></div>
+        <div class="table-scroll">
+          <table class="rank-table compact" id="compareTable"></table>
+        </div>
+      </div>
+      <div class="card">
+        <h3>初登場発行元</h3>
+        <p class="card-note">この期間で最初に番付入りした発行元をまとめて表示します。</p>
+        <div class="table-scroll">
+          <table class="rank-table compact" id="newcomerTable"></table>
+        </div>
       </div>
       <div class="card">
         <h3>急上昇発行元</h3>

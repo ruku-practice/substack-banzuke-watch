@@ -5,6 +5,8 @@ let DAILY = null;
 let dailyPromise = null;
 let cumByHost = {};
 let dailyDate = null;
+let compareHosts = [];
+let selectedCategory = null;
 let activePeriodKey = "cumulative";
 let sortKey = "top10";
 let sortDir = "desc"; // desc | asc
@@ -99,6 +101,7 @@ function renderPeriodTabs() {
 
 function setPeriod(key) {
   activePeriodKey = key;
+  selectedCategory = null;
   renderPeriodTabs();
   renderRanking();
   renderTrends();
@@ -128,6 +131,12 @@ function bindEvents() {
     if (e.target.closest("a")) return;
     const tr = e.target.closest("tr[data-host]");
     if (tr) openDetail(tr.dataset.host);
+  });
+  $("#compareA").addEventListener("change", renderCompare);
+  $("#compareB").addEventListener("change", renderCompare);
+  $("#catTable").addEventListener("click", (e) => {
+    const tr = e.target.closest("tr[data-cat]");
+    if (tr) renderCategoryDetail(tr.dataset.cat);
   });
 
   // モーダル閉じる
@@ -326,10 +335,156 @@ function renderTrends() {
   $("#catTable").innerHTML =
     `<thead><tr><th style="text-align:left">カテゴリ</th><th>Top10</th><th>Top3</th><th>件数</th><th>平均注目度</th></tr></thead>` +
     "<tbody>" + cats.map((c) =>
-      `<tr><td style="text-align:left">${esc(c.category)}</td><td>${c.top10}</td><td>${c.top3}</td><td>${c.entries}</td><td>${c.avg_attention}</td></tr>`
+      `<tr class="row-click" data-cat="${esc(c.category)}" title="クリックで深掘り"><td style="text-align:left">${esc(c.category)}</td><td>${c.top10}</td><td>${c.top3}</td><td>${c.entries}</td><td>${c.avg_attention}</td></tr>`
     ).join("") + "</tbody>";
 
+  renderCompareSelectors(period);
+  renderCompare();
+  renderCategoryDetail();
+  renderNewcomers(period);
+  loadDaily().then(() => {
+    if (selectedCategory !== "__none__" && !$("#trendsView").hidden) renderCategoryDetail();
+  });
   renderRisers();
+}
+
+function renderCompareSelectors(period) {
+  const list = sortPublishers(period.publishers || []);
+  compareHosts = list.slice(0, 2).map((p) => p.host);
+  const opts = list.map((p) => `<option value="${esc(p.host)}">${esc(p.name)} (${esc(p.host)})</option>`).join("");
+  const a = $("#compareA");
+  const b = $("#compareB");
+  if (!a || !b) return;
+  if (a.innerHTML !== opts) a.innerHTML = opts;
+  if (b.innerHTML !== opts) b.innerHTML = opts;
+  if (compareHosts[0]) a.value = compareHosts[0];
+  if (compareHosts[1]) b.value = compareHosts[1];
+  else b.value = compareHosts[0] || a.value;
+}
+
+function compareStat(p, period) {
+  const s = scoreValue(p, period);
+  return {
+    host: p.host,
+    name: p.name,
+    category: p.category || "（カテゴリ未設定）",
+    first_date: p.first_date || "—",
+    days: p.days,
+    top1: p.top1,
+    top3: p.top3,
+    top10: p.top10,
+    top10Rate: s.top10Rate,
+    avg_rank: p.avg_rank,
+    best_rank: p.best_rank || "—",
+    avg_attention: p.avg_attention,
+    score: s.score,
+    label: scoreLabel(s.score),
+  };
+}
+
+function renderCompare() {
+  const period = currentPeriod();
+  const list = period.publishers || [];
+  if (!list.length) return;
+  const aHost = $("#compareA")?.value || list[0].host;
+  const bHost = $("#compareB")?.value || list[Math.min(1, list.length - 1)].host || list[0].host;
+  const a = list.find((p) => p.host === aHost) || list[0];
+  const b = list.find((p) => p.host === bHost) || list[Math.min(1, list.length - 1)] || list[0];
+  if (!a || !b) return;
+  const sa = compareStat(a, period);
+  const sb = compareStat(b, period);
+  const rows = [
+    ["カテゴリー", sa.category, sb.category],
+    ["初登場", sa.first_date, sb.first_date],
+    ["登場日数", `${sa.days}日`, `${sb.days}日`],
+    ["Top1", `${sa.top1}回`, `${sb.top1}回`],
+    ["Top3", `${sa.top3}回`, `${sb.top3}回`],
+    ["Top10", `${sa.top10}回`, `${sb.top10}回`],
+    ["Top10率", `${sa.top10Rate}%`, `${sb.top10Rate}%`],
+    ["平均順位", `${sa.avg_rank}位`, `${sb.avg_rank}位`],
+    ["最高順位", `${sa.best_rank}位`, `${sb.best_rank}位`],
+    ["平均注目度", sa.avg_attention, sb.avg_attention],
+    ["番付偏差値", `${sa.score} (${sa.label})`, `${sb.score} (${sb.label})`],
+  ];
+  $("#compareTable").innerHTML =
+    `<thead><tr><th style="text-align:left">項目</th><th style="text-align:left">${esc(sa.name)}</th><th style="text-align:left">${esc(sb.name)}</th></tr></thead>` +
+    "<tbody>" + rows.map((r) =>
+      `<tr><td style="text-align:left">${esc(r[0])}</td><td style="text-align:left">${esc(r[1])}</td><td style="text-align:left">${esc(r[2])}</td></tr>`
+    ).join("") + "</tbody>";
+  const winner = sa.score === sb.score ? "引き分け" : (sa.score > sb.score ? sa.name : sb.name);
+  $("#compareSummary").innerHTML =
+    `<div class="compare-pill">比較基準: <b>${esc(period.label)}</b></div>` +
+    `<div class="compare-pill">勝ち筋: <b>${esc(winner)}</b></div>`;
+}
+
+function renderCategoryDetail(cat) {
+  const period = currentPeriod();
+  if (cat !== undefined) selectedCategory = cat || "__none__";
+  const key = selectedCategory === "__none__"
+    ? null
+    : (selectedCategory || (period.trends.categories && period.trends.categories[0] && period.trends.categories[0].category));
+  const panel = $("#categoryDetail");
+  if (!panel) return;
+  if (!key) {
+    panel.hidden = true;
+    panel.innerHTML = "";
+    return;
+  }
+  const pubs = (period.publishers || [])
+    .filter((p) => (p.category || "（カテゴリ未設定）") === key)
+    .sort((a, b) => (b.top10 - a.top10) || (a.avg_rank - b.avg_rank) || tieBreak(a, b))
+    .slice(0, 8);
+  const entries = [];
+  if (DAILY && DAILY.dates) {
+    DAILY.dates.forEach((d) => (DAILY.days[d] || []).forEach((e) => {
+      if ((e.cat || "（カテゴリ未設定）") === key) entries.push({ date: d, ...e });
+    }));
+  }
+  entries.sort((a, b) => b.date.localeCompare(a.date) || a.r - b.r);
+  const recent = entries.slice(0, 8);
+  panel.hidden = false;
+  panel.innerHTML = `
+    <div class="category-detail-head">
+      <div>
+        <span class="category-eyebrow">カテゴリ深掘り</span>
+        <h4>${esc(key)}</h4>
+      </div>
+      <button type="button" id="categoryReset">カテゴリ選択を解除</button>
+    </div>
+    <div class="category-detail-grid">
+      <div>
+        <div class="category-mini-title">強い発行元</div>
+        <ol class="category-list">
+          ${pubs.map((p) => `<li><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a><span>${p.top10}回 / 平均${p.avg_rank}位</span></li>`).join("")}
+        </ol>
+      </div>
+      <div>
+        <div class="category-mini-title">最新の番付入り記事</div>
+        <ol class="category-list">
+          ${recent.map((e) => `<li><a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.t || "(無題)")}</a><span>${esc(e.date)} / ${esc(e.n)} / ${e.r}位</span></li>`).join("")}
+        </ol>
+      </div>
+    </div>`;
+  const reset = $("#categoryReset");
+  if (reset) reset.addEventListener("click", () => {
+    selectedCategory = "__none__";
+    panel.hidden = true;
+    panel.innerHTML = "";
+  });
+}
+
+function renderNewcomers(period) {
+  const list = (period.publishers || [])
+    .filter((p) => p.first_date)
+    .sort((a, b) => String(b.first_date).localeCompare(String(a.first_date)) || (a.best_rank - b.best_rank) || tieBreak(a, b))
+    .slice(0, 12);
+  $("#newcomerTable").innerHTML =
+    `<thead><tr><th style="text-align:left">発行元</th><th>初登場</th><th>登場日数</th><th>Top10</th><th>最高順位</th></tr></thead>` +
+    "<tbody>" + list.map((p) =>
+      `<tr class="row-click" data-host="${esc(p.host)}"><td style="text-align:left"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a><span class="host">${esc(p.host)}</span></td><td>${esc(p.first_date)}</td><td>${p.days}</td><td>${p.top10}</td><td>${p.best_rank || "—"}</td></tr>`
+    ).join("") + "</tbody>";
+  $("#newcomerTable").querySelectorAll("tr[data-host]").forEach((tr) =>
+    tr.addEventListener("click", (e) => { if (!e.target.closest("a")) openDetail(tr.dataset.host); }));
 }
 
 function renderRisers() {

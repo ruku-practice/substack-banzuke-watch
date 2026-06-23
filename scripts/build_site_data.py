@@ -82,7 +82,8 @@ def aggregate_publishers(rows):
         "dates": set(), "appearances": 0, "top1": 0, "top3": 0, "top10": 0,
         "rank_sum": 0, "best_rank": 99, "att_sum": 0,
         "likes": 0, "restacks": 0, "comments": 0,
-        "latest_date": "", "name": "", "host": "", "url": "",
+        "latest_date": "", "first_date": "", "name": "", "host": "", "url": "",
+        "category_counts": defaultdict(int),
     })
     for r in rows:
         s = g[r["key"]]
@@ -101,6 +102,10 @@ def aggregate_publishers(rows):
         s["likes"] += r["likes"]
         s["restacks"] += r["restacks"]
         s["comments"] += r["comments"]
+        if r["category"]:
+            s["category_counts"][r["category"]] += 1
+        if not s["first_date"] or r["date"] < s["first_date"]:
+            s["first_date"] = r["date"]
         # 表示名・リンクは「期間内で最新日付」の表記を採用
         if r["date"] >= s["latest_date"]:
             s["latest_date"] = r["date"]
@@ -111,12 +116,17 @@ def aggregate_publishers(rows):
     out = []
     for key, s in g.items():
         n = s["appearances"]
+        cat = ""
+        if s["category_counts"]:
+            cat = sorted(s["category_counts"].items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
         out.append({
             "name": s["name"] or key,
             "host": s["host"],
             "url": s["url"],
             "days": len(s["dates"]),
             "appearances": n,
+            "first_date": s["first_date"] or None,
+            "category": cat,
             "top1": s["top1"],
             "top3": s["top3"],
             "top10": s["top10"],
