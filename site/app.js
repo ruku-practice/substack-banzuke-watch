@@ -23,9 +23,9 @@ async function init() {
   }
   renderMeta();
   renderPeriodTabs();
-  renderTrends();
   bindEvents();
   renderRanking();
+  renderTrends();
   if (location.hash === "#trends") activateView("trends");
 }
 
@@ -46,16 +46,23 @@ function renderMeta() {
 }
 
 function renderPeriodTabs() {
-  const wrap = $("#periodTabs");
-  wrap.innerHTML = DATA.periods.map((p) =>
-    `<button data-period="${esc(p.key)}"${p.key === activePeriodKey ? ' class="is-active"' : ""}>${esc(p.label)}</button>`
-  ).join("");
-  wrap.querySelectorAll("button").forEach((b) =>
-    b.addEventListener("click", () => {
-      activePeriodKey = b.dataset.period;
-      wrap.querySelectorAll("button").forEach((x) => x.classList.toggle("is-active", x === b));
-      renderRanking();
-    }));
+  ["#periodTabs", "#periodTabsTrends"].forEach((sel) => {
+    const wrap = $(sel);
+    if (!wrap) return;
+    wrap.innerHTML = DATA.periods.map((p) =>
+      `<button data-period="${esc(p.key)}"${p.key === activePeriodKey ? ' class="is-active"' : ""}>${esc(p.label)}</button>`
+    ).join("");
+    wrap.querySelectorAll("button").forEach((b) =>
+      b.addEventListener("click", () => setPeriod(b.dataset.period)));
+  });
+}
+
+function setPeriod(key) {
+  activePeriodKey = key;
+  $$("#periodTabs button, #periodTabsTrends button").forEach((x) =>
+    x.classList.toggle("is-active", x.dataset.period === key));
+  renderRanking();
+  renderTrends();
 }
 
 function bindEvents() {
@@ -89,6 +96,16 @@ function bindEvents() {
 
 function currentPeriod() {
   return DATA.periods.find((p) => p.key === activePeriodKey) || DATA.periods[0];
+}
+
+function avatarHtml(p) {
+  const logo = (DATA.logos && DATA.logos[p.host]) || "";
+  const inner = logo
+    ? `<img class="avatar" src="${esc(logo)}" loading="lazy" decoding="async" alt="">`
+    : `<span class="avatar avatar-fallback">${esc((p.name || "?").trim().charAt(0))}</span>`;
+  return p.url
+    ? `<a class="avatar-link" href="${esc(p.url)}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">${inner}</a>`
+    : inner;
 }
 
 function sortPublishers(list) {
@@ -141,6 +158,7 @@ function renderRanking() {
     const host = p.host ? `<span class="host">${esc(p.host)}</span>` : "";
     return `<tr class="medal-${idx}">
       <td class="col-idx">${idx}</td>
+      <td class="col-avatar">${avatarHtml(p)}</td>
       <td class="col-name">${link}${host}</td>
       <td>${p.days}</td>
       <td class="${p.top1 ? "num hot" : ""}">${p.top1}</td>
@@ -153,26 +171,32 @@ function renderRanking() {
 }
 
 function renderTrends() {
-  const t = DATA.trends;
-  // per-rank attention bar chart
-  const pr = t.per_rank_attention;
-  const max = Math.max(...pr.map((x) => x.avg_attention), 1);
-  $("#perRankChart").innerHTML = pr.map((x) => `
-    <div class="bar-row">
-      <span class="lbl">${x.rank}位</span>
-      <span class="bar-track"><span class="bar-fill" style="width:${(x.avg_attention / max * 100).toFixed(1)}%"></span></span>
-      <span class="val">${x.avg_attention}</span>
-    </div>`).join("");
+  const period = currentPeriod();
+  const t = period.trends;
+  $("#trendNote").textContent =
+    `${period.label}：${period.start} 〜 ${period.end}（${period.days}日間・${period.entries}件）の集計`;
 
-  // band table
+  // 上位の平均注目度（スタッツカード）
+  const s = t.summary || {};
+  const cards = [
+    ["1位の平均注目度", s.avg_att_rank1],
+    ["Top3の平均", s.avg_att_top3],
+    ["Top10の平均", s.avg_att_top10],
+    ["番付全体の平均", s.avg_att_all],
+  ];
+  $("#statCards").innerHTML = cards.map(([label, val]) =>
+    `<div class="stat-card"><span class="stat-val">${val ?? "-"}</span><span class="stat-lbl">${label}</span></div>`
+  ).join("");
+
+  // 順位帯別 平均指標
   $("#bandTable").innerHTML =
     `<thead><tr><th style="text-align:left">順位帯</th><th>件数</th><th>注目度</th><th>♥</th><th>Restack</th><th>コメント</th></tr></thead>` +
-    "<tbody>" + t.bands.map((b) =>
+    "<tbody>" + (t.bands || []).map((b) =>
       `<tr><td style="text-align:left">${esc(b.label)}</td><td>${b.n}</td><td>${b.avg_attention}</td><td>${b.avg_likes}</td><td>${b.avg_restacks}</td><td>${b.avg_comments}</td></tr>`
     ).join("") + "</tbody>";
 
-  // category table (top 15)
-  const cats = t.categories.slice(0, 15);
+  // カテゴリ別ランキング（上位15）
+  const cats = (t.categories || []).slice(0, 15);
   $("#catTable").innerHTML =
     `<thead><tr><th style="text-align:left">カテゴリ</th><th>Top10</th><th>Top3</th><th>件数</th><th>平均注目度</th></tr></thead>` +
     "<tbody>" + cats.map((c) =>

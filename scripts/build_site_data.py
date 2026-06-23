@@ -16,9 +16,19 @@ from urllib.parse import urlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "banzuke_full.csv"))
+LOGOS_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "logos.json"))
 OUT_PATH = os.path.normpath(os.path.join(HERE, "..", "site", "data.json"))
 
 SITE_NAME = "Substack番付 つみあげウォッチ"
+
+LOGOS = {}
+
+
+def load_logos():
+    global LOGOS
+    if os.path.exists(LOGOS_PATH):
+        with open(LOGOS_PATH, encoding="utf-8") as f:
+            LOGOS = json.load(f)
 
 
 def host_of(url: str) -> str:
@@ -132,6 +142,10 @@ def period_payload(key, label, rows):
         "days": len(dates),
         "entries": len(rows),
         "publishers": aggregate_publishers(rows),
+        "trends": {
+            **compute_trends(rows),
+            "categories": category_stats(rows),
+        },
     }
 
 
@@ -168,7 +182,18 @@ def compute_trends(rows):
             "avg_comments": round(sum(r["comments"] for r in sub) / n, 1),
         })
 
-    return {"per_rank_attention": per_rank_attention, "bands": band_stats}
+    # 要点サマリー（上位の平均注目度など）
+    def avg_att(pred):
+        sub = [r["attention"] for r in rows if pred(r["rank"])]
+        return round(sum(sub) / len(sub), 1) if sub else 0
+    summary = {
+        "avg_att_rank1": avg_att(lambda rk: rk == 1),
+        "avg_att_top3": avg_att(lambda rk: rk <= 3),
+        "avg_att_top10": avg_att(lambda rk: rk <= 10),
+        "avg_att_all": avg_att(lambda rk: True),
+    }
+
+    return {"summary": summary, "per_rank_attention": per_rank_attention, "bands": band_stats}
 
 
 def category_stats(rows):
@@ -191,6 +216,7 @@ def category_stats(rows):
 
 
 def main():
+    load_logos()
     rows = load_rows()
     if not rows:
         raise SystemExit("No rows in CSV")
@@ -230,12 +256,9 @@ def main():
         "source": {"name": "Substack番付", "url": "https://substackbanzuke.com/"},
         "date_range": {"start": start, "end": end, "days": len(all_dates), "entries": len(rows)},
         "publisher_count": len({r["key"] for r in rows}),
+        "logo_count": sum(1 for v in LOGOS.values() if v),
+        "logos": {h: u for h, u in LOGOS.items() if u},
         "periods": periods,
-        "trends": {
-            **compute_trends(rows),
-            "categories": category_stats(rows),
-            "categories_last30": category_stats([r for r in rows if in_range(r, last30_start)]),
-        },
     }
 
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)

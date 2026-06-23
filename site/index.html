@@ -41,6 +41,7 @@
         <thead>
           <tr>
             <th class="col-idx">#</th>
+            <th class="col-avatar" aria-label="アイコン"></th>
             <th class="col-name" data-sort="name">発行元</th>
             <th class="num" data-sort="days">登場<br>日数</th>
             <th class="num" data-sort="top1">1位</th>
@@ -58,19 +59,26 @@
 
   <!-- トレンドビュー -->
   <section id="trendsView" hidden>
+    <div class="controls">
+      <div class="period-tabs" id="periodTabsTrends"></div>
+    </div>
+    <p class="period-note" id="trendNote"></p>
     <div class="trend-grid">
       <div class="card">
-        <h3>順位別 平均注目度（Top10）</h3>
-        <div id="perRankChart" class="bar-chart"></div>
+        <h3>上位の平均注目度</h3>
+        <p class="card-note">注目度＝番付の総合スコア（♥・Restack・コメント等から算出）。番付の上位ほど高くなる傾向です。</p>
+        <div class="stat-cards" id="statCards"></div>
       </div>
       <div class="card">
         <h3>順位帯別 平均指標</h3>
+        <p class="card-note">順位帯ごとの平均値。上位ほど♥やRestackが伸びています。</p>
         <div class="table-scroll">
           <table class="rank-table compact" id="bandTable"></table>
         </div>
       </div>
       <div class="card">
         <h3>カテゴリ別ランキング（Top10入り回数順）</h3>
+        <p class="card-note">どのジャンルの記事が番付上位に多いか。</p>
         <div class="table-scroll">
           <table class="rank-table compact" id="catTable"></table>
         </div>

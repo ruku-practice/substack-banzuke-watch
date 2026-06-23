@@ -5,6 +5,8 @@ on:
     - cron: "15 23 * * *"  # 約 08:15 JST（番付公開直後を狙う）
     - cron: "0 3 * * *"    # 約 12:00 JST（取りこぼし用の保険・未取得日のみ取得）
   workflow_dispatch: {}     # 手動実行も可
+  push:
+    branches: [main]        # コード更新時も再デプロイ（botコミットは再トリガーされない）
 
 permissions:
   contents: write   # data.json / CSV のコミット用
@@ -31,6 +33,9 @@ jobs:
       - name: 未取得日の番付を収集（バックフィル）
         run: python3 scripts/scrape.py
 
+      - name: 新規発行元のロゴURLを収集（増分）
+        run: python3 scripts/fetch_logos.py
+
       - name: 集計して data.json を生成
         run: python3 scripts/build_site_data.py
 
@@ -38,7 +43,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/banzuke_full.csv site/data.json
+          git add data/banzuke_full.csv data/logos.json site/data.json
           if git diff --staged --quiet; then
             echo "変更なし（本日分はまだ未公開の可能性）"
           else
