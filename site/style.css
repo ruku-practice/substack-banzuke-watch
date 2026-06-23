@@ -146,6 +146,14 @@ main { padding-bottom: 8px; }
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235c5448' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 12px center;
 }
+.custom-range { display: inline-flex; align-items: center; gap: 6px; }
+.custom-range input[type="date"] {
+  font: inherit; font-size: .8rem; padding: 5px 10px; border: 1px solid var(--accent);
+  border-radius: var(--r-pill); background: var(--card); color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+.custom-range input[type="date"]:focus { outline: none; box-shadow: 0 0 0 3px var(--accent-tint); }
+.custom-range .cr-sep { color: var(--ink-3); font-size: .8rem; }
 .search-wrap { flex: 1 1 200px; min-width: 170px; max-width: 280px; }
 #searchBox {
   width: 100%; font: inherit; font-size: .86rem; padding: 8px 16px;

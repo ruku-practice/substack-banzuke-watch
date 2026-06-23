@@ -8,6 +8,8 @@ let dailyDate = null;
 let compareHosts = [];
 let selectedCategory = null;
 let activePeriodKey = "cumulative";
+let customPeriod = null;
+let customRange = null;
 let activeView = "ranking";
 let sortKey = "top10";
 let sortDir = "desc"; // desc | asc
@@ -53,6 +55,13 @@ async function init() {
   const requestedRiserSearch = params.get(RISER_QUERY_PARAM);
   const requestedNewcomerSearch = params.get(NEWCOMER_QUERY_PARAM);
   if (requestedPeriod && DATA.periods.some((p) => p.key === requestedPeriod)) activePeriodKey = requestedPeriod;
+  let restoreCustom = false;
+  if (requestedPeriod === "custom") {
+    activePeriodKey = "custom";
+    const crs = params.get("crs"), cre = params.get("cre");
+    if (crs && cre) customRange = { start: crs, end: cre };
+    restoreCustom = true;
+  }
   if (requestedView && ["ranking", "trends", "daily", "risers", "newcomers"].includes(requestedView)) activeView = requestedView;
   else {
     const hashView = location.hash.replace(/^#/, "");
@@ -71,6 +80,7 @@ async function init() {
   activateView(activeView);
   const initialHost = params.get(DETAIL_PARAM);
   if (initialHost && cumByHost[initialHost]) openDetail(initialHost, { updateUrl: false });
+  if (restoreCustom) ensureCustomPeriod().then(afterPeriodChange);
 }
 
 function activateView(view) {
@@ -128,23 +138,149 @@ function renderPeriodTabs() {
           `<option value="${esc(p.key)}"${p.key === activePeriodKey ? " selected" : ""}>${esc(p.label)}</option>`
         ).join("") + `</select>`;
     }
+    // 任意の期間
+    html += `<button data-period="custom"${activePeriodKey === "custom" ? ' class="is-active"' : ""}>任意の期間</button>`;
+    if (activePeriodKey === "custom") {
+      const r = customRange || defaultCustomRange();
+      const min = DATA.date_range.start, max = DATA.date_range.end;
+      html += `<span class="custom-range">` +
+        `<input type="date" class="cr-start" value="${esc(r.start)}" min="${esc(min)}" max="${esc(max)}" aria-label="開始日">` +
+        `<span class="cr-sep">〜</span>` +
+        `<input type="date" class="cr-end" value="${esc(r.end)}" min="${esc(min)}" max="${esc(max)}" aria-label="終了日">` +
+        `</span>`;
+    }
     wrap.innerHTML = html;
     wrap.querySelectorAll("button").forEach((b) =>
       b.addEventListener("click", () => setPeriod(b.dataset.period)));
     const ms = wrap.querySelector(".month-select");
     if (ms) ms.addEventListener("change", () => { if (ms.value) setPeriod(ms.value); });
+    const cs = wrap.querySelector(".cr-start"), ce = wrap.querySelector(".cr-end");
+    if (cs && ce) {
+      const onCh = () => applyCustomRange(cs.value, ce.value);
+      cs.addEventListener("change", onCh);
+      ce.addEventListener("change", onCh);
+    }
   });
 }
 
 function setPeriod(key) {
   activePeriodKey = key;
   selectedCategory = null;
+  if (key === "custom") { ensureCustomPeriod().then(afterPeriodChange); return; }
+  afterPeriodChange();
+}
+
+function afterPeriodChange() {
   renderPeriodTabs();
   renderRanking();
   renderTrends();
   renderRisers();
   renderNewcomers(currentPeriod());
   syncViewUrl();
+}
+
+function defaultCustomRange() {
+  const end = DATA.date_range.end;
+  const d = new Date(end + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - 13);
+  let start = d.toISOString().slice(0, 10);
+  if (start < DATA.date_range.start) start = DATA.date_range.start;
+  return { start, end };
+}
+
+async function ensureCustomPeriod() {
+  await loadDaily();
+  if (!customRange) customRange = defaultCustomRange();
+  customPeriod = buildCustomPeriod(customRange.start, customRange.end);
+}
+
+function applyCustomRange(start, end) {
+  if (!start || !end) return;
+  if (start > end) { const t = start; start = end; end = t; }
+  const min = DATA.date_range.start, max = DATA.date_range.end;
+  if (start < min) start = min;
+  if (end > max) end = max;
+  customRange = { start, end };
+  activePeriodKey = "custom";
+  loadDaily().then(() => { customPeriod = buildCustomPeriod(start, end); afterPeriodChange(); });
+}
+
+// daily.json から任意期間の発行元集計（build_site_data.py と同じロジック）
+function aggregateFromDailyRows(rows) {
+  const g = new Map();
+  for (const e of rows) {
+    const key = e.h || e.n;
+    let s = g.get(key);
+    if (!s) { s = { dates: new Set(), app: 0, top1: 0, top3: 0, top10: 0, rankSum: 0, best: 99, att: 0, likes: 0, rs: 0, c: 0, latest: "", first: "", name: "", host: "", url: "", cat: {} }; g.set(key, s); }
+    s.dates.add(e.date); s.app++;
+    const rk = e.r;
+    if (rk === 1) s.top1++;
+    if (rk <= 3) s.top3++;
+    if (rk <= 10) s.top10++;
+    s.rankSum += rk; if (rk < s.best) s.best = rk;
+    s.att += e.a; s.likes += e.l; s.rs += e.rs; s.c += e.c;
+    if (e.cat) s.cat[e.cat] = (s.cat[e.cat] || 0) + 1;
+    if (!s.first || e.date < s.first) s.first = e.date;
+    if (e.date >= s.latest) { s.latest = e.date; s.name = e.n; s.host = e.h; s.url = e.h ? ("https://" + e.h + "/") : e.u; }
+  }
+  const r1 = (x) => Math.round(x * 10) / 10;
+  const out = [];
+  for (const [key, s] of g) {
+    const n = s.app;
+    let cat = "", bestCnt = -1;
+    for (const [k, v] of Object.entries(s.cat)) { if (v > bestCnt || (v === bestCnt && k < cat)) { bestCnt = v; cat = k; } }
+    out.push({
+      name: s.name || key, host: s.host, url: s.url, days: s.dates.size, appearances: n,
+      first_date: s.first || null, category: cat,
+      top1: s.top1, top3: s.top3, top10: s.top10,
+      avg_rank: n ? r1(s.rankSum / n) : 0, best_rank: s.best !== 99 ? s.best : null,
+      avg_attention: n ? r1(s.att / n) : 0, avg_likes: n ? r1(s.likes / n) : 0,
+      avg_restacks: n ? r1(s.rs / n) : 0, avg_comments: n ? r1(s.c / n) : 0,
+    });
+  }
+  out.sort((a, b) => (b.top10 - a.top10)
+    || ((a.host === RUKU_HOST ? 0 : 1) - (b.host === RUKU_HOST ? 0 : 1))
+    || String(a.host).localeCompare(String(b.host)));
+  return out;
+}
+
+function trendsFromDailyRows(rows) {
+  const r1 = (x) => Math.round(x * 10) / 10;
+  const bandsDef = [["1位", 1, 1], ["2〜3位", 2, 3], ["4〜10位", 4, 10], ["11〜20位", 11, 20], ["21〜30位", 21, 30]];
+  const bands = [];
+  for (const [label, lo, hi] of bandsDef) {
+    const sub = rows.filter((e) => e.r >= lo && e.r <= hi);
+    const n = sub.length; if (!n) continue;
+    const avg = (f) => r1(sub.reduce((s, e) => s + f(e), 0) / n);
+    bands.push({ label, n, avg_attention: avg((e) => e.a), avg_likes: avg((e) => e.l), avg_restacks: avg((e) => e.rs), avg_comments: avg((e) => e.c) });
+  }
+  const attBy = (pred) => { const sub = rows.filter((e) => pred(e.r)); return sub.length ? r1(sub.reduce((s, e) => s + e.a, 0) / sub.length) : 0; };
+  const summary = { avg_att_rank1: attBy((r) => r === 1), avg_att_top3: attBy((r) => r <= 3), avg_att_top10: attBy((r) => r <= 10), avg_att_all: attBy(() => true) };
+  const cg = new Map();
+  for (const e of rows) {
+    const k = e.cat || "（カテゴリ未設定）";
+    let s = cg.get(k); if (!s) { s = { entries: 0, att: 0, top10: 0, top3: 0 }; cg.set(k, s); }
+    s.entries++; s.att += e.a; if (e.r <= 10) s.top10++; if (e.r <= 3) s.top3++;
+  }
+  const categories = [...cg].map(([category, s]) => ({ category, entries: s.entries, top10: s.top10, top3: s.top3, avg_attention: s.entries ? r1(s.att / s.entries) : 0 }))
+    .sort((a, b) => (b.top10 - a.top10) || (b.entries - a.entries));
+  return { summary, bands, categories };
+}
+
+function buildCustomPeriod(start, end) {
+  const rows = [];
+  for (const d of DAILY.dates) {
+    if (d >= start && d <= end) (DAILY.days[d] || []).forEach((e) => rows.push({ date: d, ...e }));
+  }
+  const dates = [...new Set(rows.map((r) => r.date))].sort();
+  return {
+    key: "custom",
+    label: `任意（${start}〜${end}）`,
+    start: dates[0] || start, end: dates[dates.length - 1] || end,
+    days: dates.length, entries: rows.length,
+    publishers: aggregateFromDailyRows(rows),
+    trends: trendsFromDailyRows(rows),
+  };
 }
 
 function syncViewInputs() {
@@ -160,6 +296,9 @@ function syncViewUrl() {
   const url = new URL(location.href);
   const params = url.searchParams;
   params.set(PERIOD_PARAM, activePeriodKey);
+  if (activePeriodKey === "custom" && customRange) {
+    params.set("crs", customRange.start); params.set("cre", customRange.end);
+  } else { params.delete("crs"); params.delete("cre"); }
   if (activeView !== "ranking") params.set(VIEW_PARAM, activeView);
   else params.delete(VIEW_PARAM);
   if (searchTerm) params.set(RANK_QUERY_PARAM, searchTerm); else params.delete(RANK_QUERY_PARAM);
@@ -255,6 +394,7 @@ function bindEvents() {
 }
 
 function currentPeriod() {
+  if (activePeriodKey === "custom" && customPeriod) return customPeriod;
   return DATA.periods.find((p) => p.key === activePeriodKey) || DATA.periods[0];
 }
 
