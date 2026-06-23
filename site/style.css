@@ -197,7 +197,7 @@ main { padding-bottom: 8px; }
 
 .rank-table tbody td {
   padding: 11px 10px; border-bottom: 1px solid var(--line-2);
-  text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap;
+  text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap;
   color: var(--ink); transition: background .12s;
 }
 .rank-table tbody tr:last-child td { border-bottom: none; }
