@@ -209,13 +209,19 @@ function tieBreak(a, b) {
   return String(a.host || "").localeCompare(String(b.host || ""));
 }
 
-function sortPublishers(list) {
+function sortPublishers(list, period) {
   const dir = sortDir === "asc" ? 1 : -1;
   const arr = list.slice();
   arr.sort((a, b) => {
     if (sortKey === "name") {
       const r = String(a.name).localeCompare(String(b.name), "ja") * dir;
       return r || tieBreak(a, b);
+    }
+    if (sortKey === "score") {
+      const sa = scoreValue(a, period).score;
+      const sb = scoreValue(b, period).score;
+      if (sa === sb) return tieBreak(a, b);
+      return (sa - sb) * dir;
     }
     let va = a[sortKey], vb = b[sortKey];
     if (va == null) va = sortKey === "avg_rank" ? 999 : 0;
@@ -255,7 +261,7 @@ function renderRanking() {
       (p.name || "").toLowerCase().includes(searchTerm) ||
       (p.host || "").toLowerCase().includes(searchTerm));
   }
-  list = sortPublishers(list);
+  list = sortPublishers(list, period);
   renderedPublishers = list;
   renderScorePanel(period, list);
 
@@ -400,7 +406,7 @@ function renderTrends() {
 }
 
 function renderCompareSelectors(period) {
-  const list = sortPublishers(period.publishers || []);
+  const list = sortPublishers(period.publishers || [], period);
   compareHosts = list.slice(0, 2).map((p) => p.host);
   const opts = list.map((p) => `<option value="${esc(p.host)}">${esc(p.name)} (${esc(p.host)})</option>`).join("");
   const a = $("#compareA");
