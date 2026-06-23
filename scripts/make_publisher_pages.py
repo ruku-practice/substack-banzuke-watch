@@ -93,19 +93,21 @@ def circle_avatar(img, size):
     return out
 
 
-def score_of(pub, top10_rank, n, period_days):
+def raw_strength(pub, top10_rank, n, period_days):
     pct = (n - top10_rank) / (n - 1) if n > 1 else 1
     continuity = min(1, pub["days"] / period_days) if period_days else 0
     rank_power = max(0, (31 - pub["avg_rank"]) / 30) if pub["avg_rank"] else 0
-    return round(45 + pct * 25 + continuity * 18 + rank_power * 12)
+    return 45 + pct * 25 + continuity * 18 + rank_power * 12
 
 
-def score_label(s):
-    if s >= 80: return "横綱級"
-    if s >= 70: return "大関級"
-    if s >= 62: return "関脇級"
-    if s >= 55: return "小結級"
-    return "幕内級"
+def score_label(dev):
+    if dev >= 70: return "横綱級"
+    if dev >= 65: return "大関級"
+    if dev >= 60: return "関脇級"
+    if dev >= 55: return "小結級"
+    if dev >= 50: return "前頭級"
+    if dev >= 45: return "十両級"
+    return "幕下級"
 
 
 def draw_card(pub, score, label, score_rank, avatar):
@@ -215,12 +217,22 @@ def main():
     period_days = cum["days"]
 
     # cumulative.publishers は既に Top10降順（同点 ruku→host）で並ぶ＝top10_rank=index+1
+    # まず番付スコア（生）を全件算出 → 平均・標準偏差で偏差値（T得点）化する
+    valid = [(i, p) for i, p in enumerate(pubs) if p.get("host")]
+    raws = {p["host"]: raw_strength(p, i + 1, n, period_days) for i, p in valid}
+    vals = list(raws.values())
+    m = len(vals)
+    mean = sum(vals) / m if m else 0
+    std = (sum((x - mean) ** 2 for x in vals) / m) ** 0.5 if m else 0
+
+    def deviation(host):
+        if std <= 0:
+            return 50
+        return round(max(25, min(85, 50 + 10 * (raws[host] - mean) / std)))
+
     scored = []
-    for i, p in enumerate(pubs):
-        if not p.get("host"):
-            continue
-        s = score_of(p, i + 1, n, period_days)
-        scored.append((s, p))
+    for i, p in valid:
+        scored.append((deviation(p["host"]), p))
     # 偏差値順位
     order = sorted(range(len(scored)), key=lambda k: -scored[k][0])
     rank_of = {}

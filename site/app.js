@@ -512,27 +512,63 @@ function renderRanking() {
   }).join("");
 }
 
-function scoreValue(p, period) {
-  const publishers = period.publishers || [];
-  const byTop10 = publishers.slice().sort((a, b) => (b.top10 - a.top10) || tieBreak(a, b));
-  const top10Rank = Math.max(1, byTop10.findIndex((x) => x.host === p.host) + 1);
-  const pct = publishers.length > 1 ? (publishers.length - top10Rank) / (publishers.length - 1) : 1;
+// 期間ごとに「番付スコア（生の強さ）」と母集団の平均・標準偏差をキャッシュ計算。
+function periodComputed(period) {
+  if (period._sc) return period._sc;
+  const pubs = period.publishers || [];
+  const N = pubs.length;
+  const byTop10 = pubs.slice().sort((a, b) => (b.top10 - a.top10) || tieBreak(a, b));
+  const top10RankMap = {};
+  byTop10.forEach((p, i) => { top10RankMap[p.host] = i + 1; });
+  const raws = {};
+  let sum = 0;
+  for (const p of pubs) {
+    raws[p.host] = rawStrength(p, period, top10RankMap[p.host] || N, N);
+    sum += raws[p.host];
+  }
+  const mean = N ? sum / N : 0;
+  let v = 0;
+  for (const p of pubs) { const d = raws[p.host] - mean; v += d * d; }
+  const std = N ? Math.sqrt(v / N) : 0;
+  const sc = { top10RankMap, raws, mean, std, N };
+  try { Object.defineProperty(period, "_sc", { value: sc, enumerable: false, configurable: true }); }
+  catch (e) { period._sc = sc; }
+  return sc;
+}
+
+// 番付スコア（生の強さ）: Top10相対順位・登場継続率・平均順位の重み付け合算。
+function rawStrength(p, period, top10Rank, N) {
+  const pct = N > 1 ? (N - top10Rank) / (N - 1) : 1;
   const continuity = period.days ? Math.min(1, p.days / period.days) : 0;
   const rankPower = p.avg_rank ? Math.max(0, (31 - p.avg_rank) / 30) : 0;
+  return 45 + pct * 25 + continuity * 18 + rankPower * 12;
+}
+
+// 偏差値（T得点）= 50 + 10×(番付スコア − 平均) ÷ 標準偏差
+function scoreValue(p, period) {
+  const sc = periodComputed(period);
+  let raw = sc.raws[p.host];
+  let top10Rank = sc.top10RankMap[p.host];
+  if (raw === undefined) { top10Rank = sc.N + 1; raw = rawStrength(p, period, top10Rank, sc.N); }
+  let dev = sc.std > 0 ? 50 + 10 * (raw - sc.mean) / sc.std : 50;
+  dev = Math.round(Math.max(25, Math.min(85, dev)));
   return {
-    score: Math.round(45 + pct * 25 + continuity * 18 + rankPower * 12),
-    top10Rank,
+    score: dev,             // 本物の偏差値（T得点）
+    raw: Math.round(raw),   // 番付スコア（生の強さ）
+    top10Rank: top10Rank || sc.N,
     top10Rate: p.days ? Math.round((p.top10 / p.days) * 100) : 0,
-    continuity: Math.round(continuity * 100),
+    continuity: period.days ? Math.round(Math.min(1, p.days / period.days) * 100) : 0,
   };
 }
 
-function scoreLabel(score) {
-  if (score >= 80) return "横綱級";
-  if (score >= 70) return "大関級";
-  if (score >= 62) return "関脇級";
-  if (score >= 55) return "小結級";
-  return "幕内級";
+function scoreLabel(dev) {
+  if (dev >= 70) return "横綱級";
+  if (dev >= 65) return "大関級";
+  if (dev >= 60) return "関脇級";
+  if (dev >= 55) return "小結級";
+  if (dev >= 50) return "前頭級";
+  if (dev >= 45) return "十両級";
+  return "幕下級";
 }
 
 function scoreHtml(p, period, compact = false, scoreRank = null) {
@@ -543,8 +579,8 @@ function scoreHtml(p, period, compact = false, scoreRank = null) {
     <div class="score-copy">
       <b>${esc(label)}</b>
       <span>${esc(period.label)}でTop10回数 ${s.top10Rank}位。登場日のTop10率 ${s.top10Rate}%、番付への継続登場率 ${s.continuity}%。</span>
-      <small class="score-rank-line">${scoreRank ? `偏差値順位 ${scoreRank}位` : "偏差値順位を計算中…"}</small>
-      <small>算出: Top10回数の相対順位 + 登場継続率 + 平均順位</small>
+      <small class="score-rank-line">偏差値 ${s.score}（${esc(label)}）${scoreRank ? ` / 偏差値順位 ${scoreRank}位` : ""} ・ 番付スコア ${s.raw}</small>
+      <small>偏差値＝番付スコア（Top10相対順位＋登場継続率＋平均順位）を、その期間の全発行元で標準化したT得点（平均50）</small>
     </div>
   </div>`;
 }
