@@ -415,11 +415,12 @@ function tieBreak(a, b) {
   return String(a.host || "").localeCompare(String(b.host || ""));
 }
 
-// 列の値が同点のときの第2キー: つみあげスコア高い順 → ルク最上位 → ホストABC。
+// 列の値が同点のときの第2キー: つみあげスコア（丸める前の精密値）の高い順 → ルク最上位 → ホストABC。
+// 精密値はTop10相対順位・登場継続率・平均順位を織り込むので、表示が同じ57でも優劣が付く。
 function tieBreakByScore(a, b, period) {
-  const sa = scoreValue(a, period).score;
-  const sb = scoreValue(b, period).score;
-  if (sa !== sb) return sb - sa;
+  const ra = scoreValue(a, period).raw;
+  const rb = scoreValue(b, period).raw;
+  if (ra !== rb) return rb - ra;
   return tieBreak(a, b);
 }
 
@@ -432,10 +433,10 @@ function sortPublishers(list, period) {
       return r || tieBreakByScore(a, b, period);
     }
     if (sortKey === "score") {
-      const sa = scoreValue(a, period).score;
-      const sb = scoreValue(b, period).score;
-      if (sa === sb) return tieBreak(a, b);
-      return (sa - sb) * dir;
+      const ra = scoreValue(a, period).raw;
+      const rb = scoreValue(b, period).raw;
+      if (ra === rb) return tieBreak(a, b);
+      return (ra - rb) * dir;
     }
     let va = a[sortKey], vb = b[sortKey];
     if (va == null) va = sortKey === "avg_rank" ? 999 : 0;
@@ -447,12 +448,9 @@ function sortPublishers(list, period) {
 }
 
 function scoreCompare(a, b, period) {
-  const sa = scoreValue(a, period);
-  const sb = scoreValue(b, period);
-  if (sa.score !== sb.score) return sb.score - sa.score;
-  if (a.top10 !== b.top10) return b.top10 - a.top10;
-  if (a.days !== b.days) return b.days - a.days;
-  if (a.avg_rank !== b.avg_rank) return a.avg_rank - b.avg_rank;
+  const ra = scoreValue(a, period).raw;
+  const rb = scoreValue(b, period).raw;
+  if (ra !== rb) return rb - ra;
   return tieBreak(a, b);
 }
 
@@ -490,7 +488,7 @@ function renderRanking() {
   $("#emptyNote").hidden = list.length > 0;
   body.innerHTML = list.map((p, i) => {
     const idx = i + 1;
-    const score = scoreValue(p, period).score;
+    const score = scoreValue(p, period).scoreText;
     const link = p.url
       ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>`
       : `<span>${esc(p.name)}</span>`;
@@ -541,8 +539,12 @@ function scoreValue(p, period) {
   const pct = sc.N > 1 ? (sc.N - top10Rank) / (sc.N - 1) : 1;
   const continuity = period.days ? Math.min(1, p.days / period.days) : 0;
   const rankPower = p.avg_rank ? Math.max(0, (31 - p.avg_rank) / 30) : 0;
+  const raw = 45 + pct * 25 + continuity * 18 + rankPower * 12;
+  const score = Math.round(raw * 10) / 10;
   return {
-    score: Math.round(45 + pct * 25 + continuity * 18 + rankPower * 12),
+    raw,                          // 丸める前の精密値（並べ替え用）
+    score,                        // 小数第1位（称号判定・比較）
+    scoreText: score.toFixed(1),  // 表示用文字列 "57.3"
     top10Rank,
     top10Rate: p.days ? Math.round((p.top10 / p.days) * 100) : 0,
     continuity: Math.round(continuity * 100),
@@ -563,7 +565,7 @@ function scoreHtml(p, period, compact = false, scoreRank = null) {
   const s = scoreValue(p, period);
   const label = scoreLabel(s.score);
   return `<div class="score-main${compact ? " compact" : ""}">
-    <div class="score-ring" aria-label="つみあげスコア ${s.score}"><span>${s.score}</span><small>スコア</small></div>
+    <div class="score-ring" aria-label="つみあげスコア ${s.scoreText}"><span>${s.scoreText}</span><small>スコア</small></div>
     <div class="score-copy">
       <b>${esc(label)}</b>
       <span>${esc(period.label)}でTop10回数 ${s.top10Rank}位。登場日のTop10率 ${s.top10Rate}%、番付への継続登場率 ${s.continuity}%。</span>
@@ -661,6 +663,8 @@ function compareStat(p, period) {
     best_rank: p.best_rank || "—",
     avg_attention: p.avg_attention,
     score: s.score,
+    raw: s.raw,
+    scoreText: s.scoreText,
     label: scoreLabel(s.score),
   };
 }
@@ -687,14 +691,14 @@ function renderCompare() {
     ["平均順位", `${sa.avg_rank}位`, `${sb.avg_rank}位`],
     ["最高順位", `${sa.best_rank}位`, `${sb.best_rank}位`],
     ["平均注目度", sa.avg_attention, sb.avg_attention],
-    ["つみあげスコア", `${sa.score} (${sa.label})`, `${sb.score} (${sb.label})`],
+    ["つみあげスコア", `${sa.scoreText} (${sa.label})`, `${sb.scoreText} (${sb.label})`],
   ];
   $("#compareTable").innerHTML =
     `<thead><tr><th style="text-align:left">項目</th><th style="text-align:left">${esc(sa.name)}</th><th style="text-align:left">${esc(sb.name)}</th></tr></thead>` +
     "<tbody>" + rows.map((r) =>
       `<tr><td style="text-align:left">${esc(r[0])}</td><td style="text-align:left">${esc(r[1])}</td><td style="text-align:left">${esc(r[2])}</td></tr>`
     ).join("") + "</tbody>";
-  const winner = sa.score === sb.score ? "引き分け" : (sa.score > sb.score ? sa.name : sb.name);
+  const winner = sa.raw === sb.raw ? "引き分け" : (sa.raw > sb.raw ? sa.name : sb.name);
   $("#compareSummary").innerHTML =
     `<div class="compare-pill">比較基準: <b>${esc(period.label)}</b></div>` +
     `<div class="compare-pill">勝ち筋: <b>${esc(winner)}</b></div>`;
@@ -779,7 +783,7 @@ function renderNewcomers(period) {
   }
   $("#newcomerTable").innerHTML = headerRow +
     "<tbody>" + list.map((p) => {
-      const score = scoreValue(p, period).score;
+      const score = scoreValue(p, period).scoreText;
       return `<tr class="row-click" data-host="${esc(p.host)}" title="クリックで詳細・順位推移">` +
       `<td class="col-avatar">${avatarHtml(p)}</td>` +
       `<td class="col-name"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a><span class="host">${esc(p.host)}</span></td>` +
@@ -835,7 +839,7 @@ function renderRisers() {
   }
   $("#riserTable").innerHTML = headerRow +
     "<tbody>" + risers.map((p) => {
-      const score = scoreValue(p, period).score;
+      const score = scoreValue(p, period).scoreText;
       return `<tr class="row-click" data-host="${esc(p.host)}" title="クリックで詳細・順位推移">` +
       `<td class="col-avatar">${avatarHtml(p)}</td>` +
       `<td class="col-name"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a><span class="host">${esc(p.host)}</span></td>` +
@@ -860,10 +864,10 @@ function csvCell(v) {
 
 function exportCsv() {
   const period = currentPeriod();
-  const header = ["rank", "name", "host", "days", "top1", "top3", "top10", "avg_rank", "avg_attention", "avg_likes", "avg_restacks", "avg_comments", "url"];
+  const header = ["rank", "name", "host", "days", "top1", "top3", "top10", "avg_rank", "avg_attention", "avg_likes", "avg_restacks", "avg_comments", "tsumiage_score", "url"];
   const rows = renderedPublishers.map((p, i) => [
     i + 1, p.name, p.host, p.days, p.top1, p.top3, p.top10, p.avg_rank,
-    p.avg_attention, p.avg_likes, p.avg_restacks, p.avg_comments, p.url,
+    p.avg_attention, p.avg_likes, p.avg_restacks, p.avg_comments, scoreValue(p, period).scoreText, p.url,
   ]);
   const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
@@ -923,7 +927,7 @@ function detailShareText(host, kind = "x") {
   const url = detailShareUrl(host, period.key);
   const lines = [
     `${periodPub.name}｜${period.label}`,
-    `つみあげスコア ${s.score}（${label}） / スコア順位 ${ranks[host] || "–"}位`,
+    `つみあげスコア ${s.scoreText}（${label}） / スコア順位 ${ranks[host] || "–"}位`,
     `Top10回数 ${s.top10Rank}位・登場日のTop10率 ${s.top10Rate}%`,
   ];
   if (kind === "notes") return [...lines, url].join("\n");
@@ -1049,7 +1053,7 @@ async function generateShareCard(host) {
   ctx.strokeStyle = "#ef6011"; ctx.beginPath();
   ctx.arc(cx, cy, rr, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2); ctx.stroke();
   ctx.textAlign = "center";
-  ctx.fillStyle = "#c94b00"; ctx.font = `600 52px ${NUM}`; ctx.fillText(String(s.score), cx, cy + 8);
+  ctx.fillStyle = "#c94b00"; ctx.font = `600 52px ${NUM}`; ctx.fillText(s.scoreText, cx, cy + 8);
   ctx.fillStyle = "#8a8174"; ctx.font = `700 17px ${UI}`; ctx.fillText("つみあげスコア", cx, cy + 36);
   ctx.fillStyle = "#c94b00"; ctx.font = `700 24px ${UI}`; ctx.fillText(label, cx, cy - rr - 16);
 

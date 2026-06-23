@@ -144,7 +144,7 @@ def draw_card(pub, score, label, score_rank, avatar):
     frac = max(0.02, min(1, (score - 40) / 60))
     bbox = (cx - rr, cy - rr, cx + rr, cy + rr)
     d.arc(bbox, -90, -90 + frac * 360, fill=ACC, width=14)
-    d.text((cx, cy - 6), str(score), font=font(56), fill=ACC2, anchor="mm")
+    d.text((cx, cy - 6), f"{score:.1f}", font=font(48), fill=ACC2, anchor="mm")
     d.text((cx, cy + 34), "つみあげスコア", font=font(16), fill=INK3, anchor="mm")
     d.text((cx, cy - rr - 18), label, font=font(26), fill=ACC2, anchor="mm")
 
@@ -217,23 +217,24 @@ def main():
     period_days = cum["days"]
 
     # cumulative.publishers は既に Top10降順（同点 ruku→host）で並ぶ＝top10_rank=index+1
+    # raw=精密値（順位付け用）, s=小数第1位（表示用）
     scored = []
     for i, p in enumerate(pubs):
         if not p.get("host"):
             continue
-        s = round(raw_strength(p, i + 1, n, period_days))
-        scored.append((s, p))
-    # スコア順位
+        raw = raw_strength(p, i + 1, n, period_days)
+        scored.append((raw, round(raw, 1), p))
+    # スコア順位（精密値の降順）
     order = sorted(range(len(scored)), key=lambda k: -scored[k][0])
     rank_of = {}
     for r, k in enumerate(order):
-        rank_of[scored[k][1]["host"]] = r + 1
+        rank_of[scored[k][2]["host"]] = r + 1
 
     os.makedirs(CARDS_DIR, exist_ok=True)
     os.makedirs(P_DIR, exist_ok=True)
 
     # アバターを並列取得
-    hosts = [p["host"] for _, p in scored]
+    hosts = [p["host"] for _, _, p in scored]
     avatars = {}
 
     def _fetch(host):
@@ -244,17 +245,18 @@ def main():
         list(ex.map(_fetch, hosts))
 
     count = 0
-    for s, p in scored:
+    for raw, s, p in scored:
         host = p["host"]
+        st = f"{s:.1f}"
         label = score_label(s)
         srank = rank_of.get(host, "–")
         img = draw_card(p, s, label, srank, avatars.get(host))
         img.save(os.path.join(CARDS_DIR, host + ".png"), "PNG")
 
-        desc = (f"つみあげスコア{s}（{label}）/ スコア順位{srank}位 ・ Top10 {p['top10']}回 / "
+        desc = (f"つみあげスコア{st}（{label}）/ スコア順位{srank}位 ・ Top10 {p['top10']}回 / "
                 f"最高{p.get('best_rank') or '–'}位 / 平均{p['avg_rank']}位。"
                 "Substack番付の日々のTOP30を累積した非公式スタッツ。")
-        ogtitle = f"{p['name']}｜つみあげスコア {s}（{label}）"
+        ogtitle = f"{p['name']}｜つみあげスコア {st}（{label}）"
         pdir = os.path.join(P_DIR, host)
         os.makedirs(pdir, exist_ok=True)
         with open(os.path.join(pdir, "index.html"), "w", encoding="utf-8") as f:
