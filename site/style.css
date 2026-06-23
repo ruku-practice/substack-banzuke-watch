@@ -63,14 +63,13 @@ b, strong { font-weight: 700; }
   opacity: .05; pointer-events: none; user-select: none;
 }
 .hero-inner { padding: 30px 20px 26px; position: relative; z-index: 1; }
-.hero-brand { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 15px; }
-.hero-brand-text { min-width: 0; }
+.hero-brand { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 16px; }
 .hero-icon {
-  width: 56px; height: 56px; flex: none;
+  width: 72px; height: 72px; flex: none; align-self: center;
   filter: drop-shadow(0 6px 14px rgba(239,96,17,.28));
 }
 .kicker {
-  margin: 0 0 2px; font-size: .68rem; font-weight: 700;
+  margin: 0 0 10px; font-size: .68rem; font-weight: 700;
   letter-spacing: .22em; color: var(--accent-2); text-transform: uppercase;
 }
 .hero-title {
@@ -206,6 +205,11 @@ main { padding-bottom: 8px; }
   min-width: 34px; height: 28px; padding: 0 8px; border-radius: 8px;
   background: var(--paper-2); border: 1px solid var(--line); color: var(--accent-2);
   font-family: var(--font-num); font-size: .95rem; font-weight: 600;
+}
+.rank-table th.col-score, .rank-table td.col-score { border-left: 1px solid var(--line); }
+.col-score .score-value-badge {
+  background: var(--accent-tint); border-color: #f6dcc3; color: var(--accent-2); font-weight: 700;
+  min-width: 40px; height: 30px; font-size: 1rem;
 }
 .detail-btn {
   appearance: none; cursor: pointer; font: inherit; font-size: .72rem; font-weight: 700;
@@ -390,7 +394,7 @@ main { padding-bottom: 8px; }
 /* ── レスポンシブ ─────────────────────────────────────── */
 @media (min-width: 720px) {
   .hero-inner { padding: 44px 20px 34px; }
-  .hero-icon { width: 64px; height: 64px; }
+  .hero-icon { width: 86px; height: 86px; }
   .pitch { grid-template-columns: 1fr 1fr; }
   .trend-grid { grid-template-columns: 1fr 1fr; }
   .trend-grid .card:first-child { grid-column: 1 / -1; }
@@ -462,16 +466,20 @@ body.modal-open { overflow: hidden; }
   background: var(--card); color: var(--ink-2); box-shadow: var(--shadow-sm);
 }
 .dm-share-btn:hover { border-color: var(--accent); color: var(--accent-2); }
+.dm-share-btn:disabled { opacity: .6; cursor: default; }
+.dm-share-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.dm-share-primary:hover { background: var(--accent-2); border-color: var(--accent-2); color: #fff; }
+.dm-share-primary svg { stroke: currentColor; }
 .dm-share-btn svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .dm-stats {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 18px 0 6px;
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 18px 0 6px;
 }
 .dm-stat {
   background: var(--paper-2); border: 1px solid var(--line); border-radius: 10px;
-  padding: 9px 6px; text-align: center; display: flex; flex-direction: column; gap: 1px;
+  padding: 9px 4px; text-align: center; display: flex; flex-direction: column; gap: 1px;
 }
-.dm-stat-v { font-family: var(--font-num); font-size: 1.1rem; font-weight: 600; color: var(--ink); }
-.dm-stat-l { font-size: .64rem; color: var(--ink-3); }
+.dm-stat-v { font-family: var(--font-num); font-size: 1.05rem; font-weight: 600; color: var(--ink); }
+.dm-stat-l { font-size: .6rem; color: var(--ink-3); white-space: nowrap; }
 .dm-score {
   margin-top: 12px; padding: 12px;
   border: 1px solid #f2d4bb; border-radius: 12px;
@@ -518,38 +526,52 @@ body.modal-open { overflow: hidden; }
   .modal { border-radius: 20px; max-height: 88vh; }
 }
 @media (max-width: 520px) {
-  .dm-stats { grid-template-columns: repeat(2, 1fr); }
+  .dm-stats { gap: 5px; }
+  .dm-stat { padding: 8px 2px; }
+  .dm-stat-v { font-size: .82rem; }
+  .dm-stat-l { font-size: .52rem; overflow: hidden; text-overflow: ellipsis; }
   .dm-h-row { grid-template-columns: 40px 1fr; }
   .dm-h-meta { grid-column: 2; }
 }
 .modal-backdrop[hidden] { display: none; }
 
 /* ── 偏差値ガイド ─────────────────────────────────────── */
-.score-guide {
-  margin-top: 26px; padding: 0 0 10px;
-}
+.score-guide { margin: 32px 0 12px; scroll-margin-top: 16px; }
 .guide-card {
   background: linear-gradient(180deg,#fffaf4,#fffefb);
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  padding: 22px 0 24px;
-}
-.guide-eyebrow {
-  margin: 0 0 4px; font-size: .68rem; font-weight: 700; letter-spacing: .16em;
-  color: var(--accent-2); text-transform: uppercase;
+  border: 1px solid var(--line); border-radius: var(--r);
+  padding: 26px 26px 28px; box-shadow: var(--shadow-sm);
 }
 .guide-card h2 {
-  margin: 0; font-family: var(--font-serif); font-size: 1.2rem; line-height: 1.3;
+  margin: 0; font-family: var(--font-serif); font-weight: 700;
+  font-size: clamp(1.45rem, 4.5vw, 1.9rem); line-height: 1.3;
+}
+.guide-card h2::before {
+  content: "📐"; margin-right: .4em; font-size: .85em;
 }
 .guide-lead {
-  margin: 10px 0 0; max-width: 58em; font-size: .84rem; color: var(--ink-2); line-height: 1.75;
+  margin: 14px 0 0; max-width: 60em; font-size: .9rem; color: var(--ink-2); line-height: 1.85;
 }
+.guide-lead b { color: var(--ink); }
 .guide-formula {
-  margin-top: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  margin-top: 18px; padding: 16px 20px; border: 1px solid var(--line); border-radius: var(--r-sm);
   background: var(--card); box-shadow: var(--shadow-sm); overflow-x: auto;
 }
-.guide-formula code { font-family: var(--font-num); font-size: .78rem; color: var(--ink); }
-.guide-points {
-  margin: 12px 0 0; padding-left: 1.2em; color: var(--ink-2); font-size: .8rem; line-height: 1.7;
+.guide-formula code {
+  font-family: var(--font-num); font-size: .92rem; color: var(--ink); white-space: nowrap;
+  letter-spacing: .01em;
 }
-.guide-points li + li { margin-top: 4px; }
+.guide-points {
+  margin: 18px 0 0; padding-left: 1.3em; color: var(--ink-2); font-size: .86rem; line-height: 1.85;
+  list-style-position: outside;
+}
+.guide-points li { padding-left: 4px; }
+.guide-points li + li { margin-top: 6px; }
+.guide-points b { color: var(--ink); }
+
+/* ヘッダの偏差値ガイドへのリンク */
+.score-guide-link {
+  display: inline-flex; align-items: center; margin-top: 14px; font-size: .8rem; font-weight: 700;
+  color: var(--accent-2); border-bottom: 1px solid transparent;
+}
+.score-guide-link:hover { border-bottom-color: currentColor; }

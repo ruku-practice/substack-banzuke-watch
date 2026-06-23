@@ -246,6 +246,7 @@ function bindEvents() {
   $("#shareX").addEventListener("click", () => shareDetail("x"));
   $("#shareNotes").addEventListener("click", () => shareDetail("notes"));
   $("#copyDetailUrl").addEventListener("click", () => shareDetail("copy"));
+  $("#copyImage").addEventListener("click", copyShareImage);
 }
 
 function currentPeriod() {
@@ -352,7 +353,6 @@ function renderRanking() {
           <span>詳細</span>
         </button>
       </td>
-      <td><span class="score-value-badge">${score}</span></td>
       <td class="${c("days")}">${p.days}</td>
       <td class="${c("top1")} ${p.top1 ? "hot" : ""}">${p.top1}</td>
       <td class="${c("top3")}">${p.top3}</td>
@@ -362,6 +362,7 @@ function renderRanking() {
       <td class="${c("avg_likes")}">${p.avg_likes}</td>
       <td class="${c("avg_restacks")}">${p.avg_restacks}</td>
       <td class="${c("avg_comments")}">${p.avg_comments}</td>
+      <td class="col-score ${"score" === sortKey ? "is-sorted" : ""}"><span class="score-value-badge">${score}</span></td>
     </tr>`;
   }).join("");
 }
@@ -704,6 +705,7 @@ function statChips(p, extra = []) {
     ["Top10", p.top10 + "回"],
     ["平均注目度", p.avg_attention],
     ["平均❤️", p.avg_likes],
+    ["平均Restack", p.avg_restacks],
   ].concat(extra);
   return items.map(([l, v]) =>
     `<div class="dm-stat"><span class="dm-stat-v">${esc(String(v))}</span><span class="dm-stat-l">${esc(l)}</span></div>`
@@ -762,6 +764,178 @@ async function shareDetail(kind) {
     return;
   }
   await copyTextToClipboard(kind === "copy" ? url : text);
+}
+
+/* ── 共有カード画像の生成＋クリップボードコピー ───────── */
+function loadImage(src, cors) {
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    if (cors) im.crossOrigin = "anonymous";
+    im.onload = () => resolve(im);
+    im.onerror = reject;
+    im.src = src;
+  });
+}
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function fillTextTrunc(ctx, text, x, y, maxW) {
+  text = String(text || "");
+  if (ctx.measureText(text).width <= maxW) { ctx.fillText(text, x, y); return; }
+  let t = text;
+  while (t.length > 1 && ctx.measureText(t + "…").width > maxW) t = t.slice(0, -1);
+  ctx.fillText(t + "…", x, y);
+}
+
+async function generateShareCard(host) {
+  await (document.fonts ? document.fonts.ready : Promise.resolve());
+  const period = currentPeriod();
+  const pub = (period.publishers || []).find((p) => p.host === host) || cumByHost[host];
+  const s = scoreValue(pub, period);
+  const label = scoreLabel(s.score);
+  const ranks = scoreRankMap(period.publishers || [], period);
+  const scoreRank = ranks[host] || "–";
+  const logo = (DATA.logos && DATA.logos[host]) || "";
+
+  const W = 1080, H = 566, SC = 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = W * SC; canvas.height = H * SC;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(SC, SC);
+  const UI = '"Zen Kaku Gothic New", sans-serif';
+  const NUM = '"Fraunces", Georgia, serif';
+  const SERIF = '"Zen Old Mincho", serif';
+
+  // 背景
+  ctx.fillStyle = "#f5f1ea"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#ef6011"; ctx.fillRect(0, 0, W, 8);
+  ctx.save(); ctx.globalAlpha = 0.05; ctx.fillStyle = "#ec600d";
+  ctx.font = `900 420px ${SERIF}`; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  ctx.fillText("番", W + 40, H / 2 + 24); ctx.restore();
+
+  // アバター
+  const ax = 64, ay = 56, asz = 120;
+  let avImg = null;
+  if (logo) {
+    try { avImg = await loadImage(`https://images.weserv.nl/?url=${encodeURIComponent(logo)}&w=240&h=240&fit=cover&output=png`, true); } catch (e) {}
+  }
+  ctx.save();
+  ctx.beginPath(); ctx.arc(ax + asz / 2, ay + asz / 2, asz / 2, 0, Math.PI * 2); ctx.clip();
+  if (avImg) { ctx.drawImage(avImg, ax, ay, asz, asz); }
+  else {
+    ctx.fillStyle = "#ef6011"; ctx.fillRect(ax, ay, asz, asz);
+    ctx.fillStyle = "#fff"; ctx.font = `700 60px ${SERIF}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText((pub.name || "?").trim().charAt(0), ax + asz / 2, ay + asz / 2 + 4);
+  }
+  ctx.restore();
+  ctx.strokeStyle = "rgba(0,0,0,.08)"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(ax + asz / 2, ay + asz / 2, asz / 2, 0, Math.PI * 2); ctx.stroke();
+
+  // 名前・ホスト・期間
+  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = "#211d18"; ctx.font = `700 40px ${UI}`;
+  fillTextTrunc(ctx, pub.name, 210, 104, 600);
+  ctx.fillStyle = "#8a8174"; ctx.font = `400 22px ${UI}`;
+  fillTextTrunc(ctx, host, 210, 140, 600);
+  ctx.fillStyle = "#5c5448"; ctx.font = `700 22px ${UI}`;
+  ctx.fillText(period.label, 210, 178);
+
+  // 偏差値リング（右上）
+  const cx = 952, cy = 116, rr = 66;
+  ctx.lineWidth = 12; ctx.lineCap = "round";
+  ctx.strokeStyle = "#f0e3d2"; ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2); ctx.stroke();
+  const frac = Math.max(0.02, Math.min(1, (s.score - 40) / 60));
+  ctx.strokeStyle = "#ef6011"; ctx.beginPath();
+  ctx.arc(cx, cy, rr, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2); ctx.stroke();
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#c94b00"; ctx.font = `600 52px ${NUM}`; ctx.fillText(String(s.score), cx, cy + 8);
+  ctx.fillStyle = "#8a8174"; ctx.font = `700 17px ${UI}`; ctx.fillText("番付偏差値", cx, cy + 36);
+  ctx.fillStyle = "#c94b00"; ctx.font = `700 24px ${UI}`; ctx.fillText(label, cx, cy - rr - 16);
+
+  // スタッツ5枠
+  const stats = [
+    ["登場日数", pub.days + "日"],
+    ["最高順位", pub.best_rank ? pub.best_rank + "位" : "–"],
+    ["Top10", pub.top10 + "回"],
+    ["平均順位", pub.avg_rank + "位"],
+    ["偏差値順位", scoreRank + "位"],
+  ];
+  const bx0 = 64, by = 250, bh = 124, gap = 18, bw = (W - 128 - gap * 4) / 5;
+  stats.forEach(([l, v], i) => {
+    const bx = bx0 + i * (bw + gap);
+    ctx.fillStyle = "#fbf9f4"; roundRectPath(ctx, bx, by, bw, bh, 14); ctx.fill();
+    ctx.strokeStyle = "#e7e0d3"; ctx.lineWidth = 1; ctx.stroke();
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#211d18"; ctx.font = `600 36px ${NUM}`; ctx.fillText(String(v), bx + bw / 2, by + 64);
+    ctx.fillStyle = "#8a8174"; ctx.font = `500 19px ${UI}`; ctx.fillText(l, bx + bw / 2, by + 96);
+  });
+
+  // フッター（ブランド）
+  ctx.strokeStyle = "#e7e0d3"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(64, 452); ctx.lineTo(W - 64, 452); ctx.stroke();
+  try {
+    const brand = await loadImage("icon.png");
+    ctx.drawImage(brand, 64, 480, 44, 44);
+  } catch (e) {}
+  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = "#211d18"; ctx.font = `700 26px ${UI}`;
+  ctx.fillText("Substack番付 つみあげウォッチ", 120, 510);
+  ctx.textAlign = "right"; ctx.fillStyle = "#8a8174"; ctx.font = `400 22px ${UI}`;
+  ctx.fillText("ruku-practice.github.io/substack-banzuke-watch", W - 64, 510);
+
+  return canvas;
+}
+
+async function copyShareImage() {
+  const btn = $("#copyImage");
+  const span = btn.querySelector("span");
+  const orig = span.textContent;
+  const host = $("#dmName").dataset.host || $("#dmHost").textContent;
+  if (!host) return;
+  span.textContent = "画像を生成中…"; btn.disabled = true;
+  try {
+    const canvas = await generateShareCard(host);
+    const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
+    const url = detailShareUrl(host, currentPeriod().key);
+    let copied = false;
+    if (navigator.clipboard && window.ClipboardItem) {
+      try {
+        await navigator.clipboard.write([new ClipboardItem({
+          "image/png": blob,
+          "text/plain": new Blob([url], { type: "text/plain" }),
+        })]);
+        copied = "both";
+      } catch (e) {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+          copied = "img";
+        } catch (e2) {}
+      }
+    }
+    if (copied === "both") span.textContent = "画像＋URLをコピー！";
+    else if (copied === "img") span.textContent = "画像をコピーしました！";
+    else {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `banzuke-${host.replace(/[^a-z0-9.-]/gi, "_")}.png`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      await copyTextToClipboard(url);
+      span.textContent = "画像を保存＋URLコピー";
+    }
+  } catch (e) {
+    console.error(e);
+    span.textContent = "失敗しました";
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { span.textContent = orig; }, 2400);
+  }
 }
 
 function buildRankChart(apps) {
