@@ -82,7 +82,14 @@ function activateView(view) {
   $("#riserView").hidden = view !== "risers";
   $("#newcomerView").hidden = view !== "newcomers";
   if (view === "daily") initDailyView();
-  if (view === "risers") renderRisers();
+  if (view === "risers") {
+    // 累積では急上昇を計算できないため、今月（無ければ直近30日）に切替
+    if (activePeriodKey === "cumulative") {
+      const fallback = DATA.periods.find((p) => p.key === "this_month") || DATA.periods.find((p) => p.key === "last30");
+      if (fallback) { activePeriodKey = fallback.key; renderPeriodTabs(); renderRanking(); renderTrends(); renderNewcomers(currentPeriod()); }
+    }
+    renderRisers();
+  }
   if (view === "newcomers") renderNewcomers(currentPeriod());
   syncViewInputs();
   syncViewUrl();
@@ -110,7 +117,9 @@ function renderPeriodTabs() {
   ["#periodTabs", "#periodTabsTrends", "#periodTabsRisers", "#periodTabsNewcomers"].forEach((sel) => {
     const wrap = $(sel);
     if (!wrap) return;
-    let html = fixed.concat(recentMonths).map((p) =>
+    // 急上昇は「累積どうし」を比較できないため累積タブを出さない
+    const fixedForSel = sel === "#periodTabsRisers" ? fixed.filter((p) => p.key !== "cumulative") : fixed;
+    let html = fixedForSel.concat(recentMonths).map((p) =>
       `<button data-period="${esc(p.key)}"${p.key === activePeriodKey ? ' class="is-active"' : ""}>${esc(p.label)}</button>`
     ).join("");
     if (olderMonths.length) {
@@ -194,10 +203,6 @@ function bindEvents() {
   });
   $("#compareA").addEventListener("change", renderCompare);
   $("#compareB").addEventListener("change", renderCompare);
-  $("#catTable").addEventListener("click", (e) => {
-    const tr = e.target.closest("tr[data-cat]");
-    if (tr) renderCategoryDetail(tr.dataset.cat);
-  });
 
   // モーダル閉じる
   $("#dmClose").addEventListener("click", closeDetail);
@@ -453,16 +458,12 @@ function renderTrends() {
   $("#catTable").innerHTML =
     `<thead><tr><th style="text-align:left">カテゴリ</th><th>Top10</th><th>Top3</th><th>件数</th><th>平均注目度</th></tr></thead>` +
     "<tbody>" + cats.map((c) =>
-      `<tr class="row-click" data-cat="${esc(c.category)}" title="クリックで深掘り"><td style="text-align:left">${esc(c.category)}</td><td>${c.top10}</td><td>${c.top3}</td><td>${c.entries}</td><td>${c.avg_attention}</td></tr>`
+      `<tr><td style="text-align:left">${esc(c.category)}</td><td>${c.top10}</td><td>${c.top3}</td><td>${c.entries}</td><td>${c.avg_attention}</td></tr>`
     ).join("") + "</tbody>";
 
   renderCompareSelectors(period);
   renderCompare();
-  renderCategoryDetail();
   renderNewcomers(period);
-  loadDaily().then(() => {
-    if (selectedCategory !== "__none__" && !$("#trendsView").hidden) renderCategoryDetail();
-  });
   renderRisers();
 }
 
@@ -603,11 +604,26 @@ function renderNewcomers(period) {
   }
   const note = $("#newcomerNote");
   if (note) note.textContent = `${period.label}で初めて番付入りした発行元の一覧`;
-  $("#newcomerTable").innerHTML =
-    `<thead><tr><th style="text-align:left">発行元</th><th>初登場</th><th>登場日数</th><th>Top10</th><th>最高順位</th></tr></thead>` +
-    "<tbody>" + list.map((p) =>
-      `<tr class="row-click" data-host="${esc(p.host)}"><td style="text-align:left"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a><span class="host">${esc(p.host)}</span></td><td>${esc(p.first_date)}</td><td>${p.days}</td><td>${p.top10}</td><td>${p.best_rank || "—"}</td></tr>`
-    ).join("") + "</tbody>";
+  const headerRow =
+    `<thead><tr><th class="col-avatar"></th><th class="col-name" style="text-align:left">発行元</th><th class="col-action">詳細</th>` +
+    `<th class="num">初登場</th><th class="num">登場<br>日数</th><th class="num">Top10</th><th class="num">最高<br>順位</th>` +
+    `<th class="num">平均<br>順位</th><th class="num">平均<br>注目度</th><th class="num col-score">番付<br>偏差値</th></tr></thead>`;
+  if (!list.length) {
+    $("#newcomerTable").innerHTML = headerRow +
+      `<tbody><tr><td colspan="10" style="text-align:center;color:var(--ink-3);padding:22px 8px">この期間に初登場の発行元はありません。</td></tr></tbody>`;
+    return;
+  }
+  $("#newcomerTable").innerHTML = headerRow +
+    "<tbody>" + list.map((p) => {
+      const score = scoreValue(p, period).score;
+      return `<tr class="row-click" data-host="${esc(p.host)}" title="クリックで詳細・順位推移">` +
+      `<td class="col-avatar">${avatarHtml(p)}</td>` +
+      `<td class="col-name"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a><span class="host">${esc(p.host)}</span></td>` +
+      `<td class="col-action">${detailBtnHtml(p)}</td>` +
+      `<td>${esc(p.first_date)}</td><td>${p.days}</td><td>${p.top10}</td><td>${p.best_rank || "—"}</td>` +
+      `<td>${p.avg_rank}位</td><td>${p.avg_attention}</td>` +
+      `<td class="col-score"><span class="score-value-badge">${score}</span></td></tr>`;
+    }).join("") + "</tbody>";
   $("#newcomerTable").querySelectorAll("tr[data-host]").forEach((tr) =>
     tr.addEventListener("click", (e) => { if (!e.target.closest("a")) openDetail(tr.dataset.host); }));
 }
@@ -641,10 +657,12 @@ function renderRisers() {
       : `${period.label}のTop10入りと累積順位を比べた急上昇リスト`;
   }
   const headerRow =
-    `<thead><tr><th style="text-align:left">発行元</th><th>${esc(period.label)}順位</th><th>累積順位</th><th>上昇</th><th>Top10</th></tr></thead>`;
+    `<thead><tr><th class="col-avatar"></th><th class="col-name" style="text-align:left">発行元</th><th class="col-action">詳細</th>` +
+    `<th class="num">上昇</th><th class="num">${esc(period.label)}<br>順位</th><th class="num">累積<br>順位</th>` +
+    `<th class="num">Top10</th><th class="num">平均<br>順位</th><th class="num">平均<br>注目度</th><th class="num col-score">番付<br>偏差値</th></tr></thead>`;
   if (!risers.length) {
     $("#riserTable").innerHTML = headerRow +
-      `<tbody><tr><td colspan="5" style="text-align:center;color:var(--ink-3);padding:22px 8px">` +
+      `<tbody><tr><td colspan="10" style="text-align:center;color:var(--ink-3);padding:22px 8px">` +
       (isCumulative
         ? "上の期間タブから「直近7日」などを選んでください。"
         : "この期間に該当する急上昇の発行元はありません。") +
@@ -652,11 +670,23 @@ function renderRisers() {
     return;
   }
   $("#riserTable").innerHTML = headerRow +
-    "<tbody>" + risers.map((p) =>
-      `<tr class="row-click" data-host="${esc(p.host)}"><td style="text-align:left"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a><span class="host">${esc(p.host)}</span></td><td>${p.recent_rank}</td><td>${p.cumulative_rank}</td><td>+${p.rise}</td><td>${p.top10}</td></tr>`
-    ).join("") + "</tbody>";
+    "<tbody>" + risers.map((p) => {
+      const score = scoreValue(p, period).score;
+      return `<tr class="row-click" data-host="${esc(p.host)}" title="クリックで詳細・順位推移">` +
+      `<td class="col-avatar">${avatarHtml(p)}</td>` +
+      `<td class="col-name"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a><span class="host">${esc(p.host)}</span></td>` +
+      `<td class="col-action">${detailBtnHtml(p)}</td>` +
+      `<td class="num hot">+${p.rise}</td><td>${p.recent_rank}</td><td>${p.cumulative_rank}</td>` +
+      `<td>${p.top10}</td><td>${p.avg_rank}位</td><td>${p.avg_attention}</td>` +
+      `<td class="col-score"><span class="score-value-badge">${score}</span></td></tr>`;
+    }).join("") + "</tbody>";
   $("#riserTable").querySelectorAll("tr[data-host]").forEach((tr) =>
     tr.addEventListener("click", (e) => { if (!e.target.closest("a")) openDetail(tr.dataset.host); }));
+}
+
+function detailBtnHtml(p) {
+  return `<button type="button" class="detail-btn" data-detail-host="${esc(p.host)}" aria-label="${esc(p.name)} の詳細">` +
+    `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 12.5h11"/><path d="M5 11l3-3 2.2 1.8L12.5 6"/><path d="M12.5 6v4"/><path d="M12.5 6h-4"/></svg><span>詳細</span></button>`;
 }
 
 function csvCell(v) {
@@ -759,8 +789,15 @@ async function shareDetail(kind) {
   const text = detailShareText(host, kind);
   const url = detailShareUrl(host, activePeriodKey);
   if (kind === "x") {
+    // X投稿欄を開く（本文＋URLは自動入力）。画像はX側で自動添付できないため、
+    // 同時にカード画像をクリップボードへコピーし、投稿欄に貼り付けてもらう。
     const intent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
     window.open(intent, "_blank", "noopener");
+    showToast("画像を生成中…");
+    try {
+      const r = await copyCardImage(host);
+      showToast(r === "download" ? "画像を保存しました。Xの投稿欄に添付してください" : "画像をコピー！Xの投稿欄に貼り付け（⌘V）してください");
+    } catch (e) { showToast("画像の用意に失敗しました"); }
     return;
   }
   await copyTextToClipboard(kind === "copy" ? url : text);
@@ -803,7 +840,7 @@ async function generateShareCard(host) {
   const scoreRank = ranks[host] || "–";
   const logo = (DATA.logos && DATA.logos[host]) || "";
 
-  const W = 1080, H = 566, SC = 2;
+  const W = 1080, H = 690, SC = 2;
   const canvas = document.createElement("canvas");
   canvas.width = W * SC; canvas.height = H * SC;
   const ctx = canvas.getContext("2d");
@@ -858,38 +895,89 @@ async function generateShareCard(host) {
   ctx.fillStyle = "#8a8174"; ctx.font = `700 17px ${UI}`; ctx.fillText("番付偏差値", cx, cy + 36);
   ctx.fillStyle = "#c94b00"; ctx.font = `700 24px ${UI}`; ctx.fillText(label, cx, cy - rr - 16);
 
-  // スタッツ5枠
+  // スタッツ10枠（5列×2行・モーダルと同内容）
   const stats = [
     ["登場日数", pub.days + "日"],
     ["最高順位", pub.best_rank ? pub.best_rank + "位" : "–"],
-    ["Top10", pub.top10 + "回"],
     ["平均順位", pub.avg_rank + "位"],
+    ["1位", pub.top1 + "回"],
+    ["Top3", pub.top3 + "回"],
+    ["Top10", pub.top10 + "回"],
+    ["平均注目度", String(pub.avg_attention)],
+    ["平均❤️", String(pub.avg_likes)],
+    ["平均Restack", String(pub.avg_restacks)],
     ["偏差値順位", scoreRank + "位"],
   ];
-  const bx0 = 64, by = 250, bh = 124, gap = 18, bw = (W - 128 - gap * 4) / 5;
+  const bx0 = 64, by0 = 244, bh = 108, gap = 18, rgap = 16, bw = (W - 128 - gap * 4) / 5;
   stats.forEach(([l, v], i) => {
-    const bx = bx0 + i * (bw + gap);
+    const bx = bx0 + (i % 5) * (bw + gap);
+    const by = by0 + Math.floor(i / 5) * (bh + rgap);
     ctx.fillStyle = "#fbf9f4"; roundRectPath(ctx, bx, by, bw, bh, 14); ctx.fill();
     ctx.strokeStyle = "#e7e0d3"; ctx.lineWidth = 1; ctx.stroke();
     ctx.textAlign = "center";
-    ctx.fillStyle = "#211d18"; ctx.font = `600 36px ${NUM}`; ctx.fillText(String(v), bx + bw / 2, by + 64);
-    ctx.fillStyle = "#8a8174"; ctx.font = `500 19px ${UI}`; ctx.fillText(l, bx + bw / 2, by + 96);
+    ctx.fillStyle = "#211d18"; ctx.font = `600 34px ${NUM}`; ctx.fillText(String(v), bx + bw / 2, by + 56);
+    ctx.fillStyle = "#8a8174"; ctx.font = `500 18px ${UI}`; ctx.fillText(l, bx + bw / 2, by + 86);
   });
 
   // フッター（ブランド）
+  const fy = 580;
   ctx.strokeStyle = "#e7e0d3"; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(64, 452); ctx.lineTo(W - 64, 452); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(64, fy); ctx.lineTo(W - 64, fy); ctx.stroke();
   try {
     const brand = await loadImage("icon.png");
-    ctx.drawImage(brand, 64, 480, 44, 44);
+    ctx.drawImage(brand, 64, fy + 28, 44, 44);
   } catch (e) {}
   ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
   ctx.fillStyle = "#211d18"; ctx.font = `700 26px ${UI}`;
-  ctx.fillText("Substack番付 つみあげウォッチ", 120, 510);
+  ctx.fillText("Substack番付 つみあげウォッチ", 120, fy + 58);
   ctx.textAlign = "right"; ctx.fillStyle = "#8a8174"; ctx.font = `400 22px ${UI}`;
-  ctx.fillText("ruku-practice.github.io/substack-banzuke-watch", W - 64, 510);
+  ctx.fillText("ruku-practice.github.io/substack-banzuke-watch", W - 64, fy + 58);
 
   return canvas;
+}
+
+// カードを生成してクリップボードへ。返り値: "both" | "img" | "download" | false
+async function copyCardImage(host) {
+  const canvas = await generateShareCard(host);
+  const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
+  const url = detailShareUrl(host, currentPeriod().key);
+  if (navigator.clipboard && window.ClipboardItem) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({
+        "image/png": blob,
+        "text/plain": new Blob([url], { type: "text/plain" }),
+      })]);
+      return "both";
+    } catch (e) {
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        return "img";
+      } catch (e2) {}
+    }
+  }
+  // フォールバック: 画像をダウンロード＋URLをテキストコピー
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `banzuke-${host.replace(/[^a-z0-9.-]/gi, "_")}.png`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  try { await copyTextToClipboard(url); } catch (e) {}
+  return "download";
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  let el = $("#cardToast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "cardToast";
+    el.className = "card-toast";
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 3200);
 }
 
 async function copyShareImage() {
@@ -900,35 +988,8 @@ async function copyShareImage() {
   if (!host) return;
   span.textContent = "画像を生成中…"; btn.disabled = true;
   try {
-    const canvas = await generateShareCard(host);
-    const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
-    const url = detailShareUrl(host, currentPeriod().key);
-    let copied = false;
-    if (navigator.clipboard && window.ClipboardItem) {
-      try {
-        await navigator.clipboard.write([new ClipboardItem({
-          "image/png": blob,
-          "text/plain": new Blob([url], { type: "text/plain" }),
-        })]);
-        copied = "both";
-      } catch (e) {
-        try {
-          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-          copied = "img";
-        } catch (e2) {}
-      }
-    }
-    if (copied === "both") span.textContent = "画像＋URLをコピー！";
-    else if (copied === "img") span.textContent = "画像をコピーしました！";
-    else {
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `banzuke-${host.replace(/[^a-z0-9.-]/gi, "_")}.png`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-      await copyTextToClipboard(url);
-      span.textContent = "画像を保存＋URLコピー";
-    }
+    const r = await copyCardImage(host);
+    span.textContent = r === "download" ? "画像を保存＋URLコピー" : "画像をコピーしました！";
   } catch (e) {
     console.error(e);
     span.textContent = "失敗しました";

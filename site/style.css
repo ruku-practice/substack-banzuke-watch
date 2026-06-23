@@ -177,6 +177,8 @@ main { padding-bottom: 8px; }
   border-bottom: 2px solid var(--ink);
 }
 .rank-table th.col-action { width: 88px; text-align: center; }
+.rank-table thead th.num { text-align: center; }
+.rank-table th.col-action { text-align: center; }
 .rank-table th[data-sort] { cursor: pointer; user-select: none; transition: background .12s, color .12s; }
 .rank-table th[data-sort]:hover { color: var(--accent-2); }
 .rank-table th.col-idx { text-align: center; width: 46px; }
@@ -534,6 +536,16 @@ body.modal-open { overflow: hidden; }
   .dm-h-meta { grid-column: 2; }
 }
 .modal-backdrop[hidden] { display: none; }
+
+/* 共有トースト */
+.card-toast {
+  position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 16px);
+  background: var(--ink); color: #fff; font-size: .82rem; font-weight: 600;
+  padding: 11px 18px; border-radius: var(--r-pill); box-shadow: var(--shadow-md);
+  z-index: 200; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s;
+  max-width: 90vw; text-align: center;
+}
+.card-toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 /* ── 偏差値ガイド ─────────────────────────────────────── */
 .score-guide { margin: 32px 0 12px; scroll-margin-top: 16px; }
