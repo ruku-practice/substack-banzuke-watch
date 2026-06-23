@@ -14,6 +14,7 @@ let searchTerm = "";
 let renderedPublishers = [];
 const RUKU_HOST = "rukupractice.substack.com";
 const DETAIL_PARAM = "p";
+const PERIOD_PARAM = "period";
 
 function loadDaily() {
   if (!dailyPromise) {
@@ -38,6 +39,10 @@ async function init() {
     $("#metaBar").textContent = "データの読み込みに失敗しました。";
     return;
   }
+  const requestedPeriod = new URLSearchParams(location.search).get(PERIOD_PARAM);
+  if (requestedPeriod && DATA.periods.some((p) => p.key === requestedPeriod)) {
+    activePeriodKey = requestedPeriod;
+  }
   const cum = DATA.periods.find((p) => p.key === "cumulative") || DATA.periods[0];
   (cum.publishers || []).forEach((p) => { cumByHost[p.host] = p; });
   renderMeta();
@@ -48,6 +53,8 @@ async function init() {
   const h = location.hash;
   if (h === "#trends") activateView("trends");
   else if (h === "#daily") activateView("daily");
+  else if (h === "#risers") activateView("risers");
+  else if (h === "#newcomers") activateView("newcomers");
   const initialHost = new URLSearchParams(location.search).get(DETAIL_PARAM);
   if (initialHost && cumByHost[initialHost]) openDetail(initialHost, { updateUrl: false });
 }
@@ -57,7 +64,11 @@ function activateView(view) {
   $("#rankingView").hidden = view !== "ranking";
   $("#trendsView").hidden = view !== "trends";
   $("#dailyView").hidden = view !== "daily";
+  $("#riserView").hidden = view !== "risers";
+  $("#newcomerView").hidden = view !== "newcomers";
   if (view === "daily") initDailyView();
+  if (view === "risers") renderRisers();
+  if (view === "newcomers") renderNewcomers(currentPeriod());
 }
 
 function renderMeta() {
@@ -79,7 +90,7 @@ function renderPeriodTabs() {
   const recentMonths = months.slice(0, 3);                 // 直近3ヶ月はタブ
   const olderMonths = months.slice(3);                     // それ以前はプルダウン
 
-  ["#periodTabs", "#periodTabsTrends"].forEach((sel) => {
+  ["#periodTabs", "#periodTabsTrends", "#periodTabsRisers", "#periodTabsNewcomers"].forEach((sel) => {
     const wrap = $(sel);
     if (!wrap) return;
     let html = fixed.concat(recentMonths).map((p) =>
@@ -105,6 +116,8 @@ function setPeriod(key) {
   renderPeriodTabs();
   renderRanking();
   renderTrends();
+  renderRisers();
+  renderNewcomers(currentPeriod());
 }
 
 function bindEvents() {
@@ -119,6 +132,13 @@ function bindEvents() {
   // ランキング行クリック → 発行元詳細（リンククリックは除外）
   $("#rankBody").addEventListener("click", (e) => {
     if (e.target.closest("a")) return;
+    const btn = e.target.closest("button[data-detail-host]");
+    if (btn) {
+      e.preventDefault();
+      e.stopPropagation();
+      openDetail(btn.dataset.detailHost);
+      return;
+    }
     const tr = e.target.closest("tr[data-host]");
     if (tr) openDetail(tr.dataset.host);
   });
@@ -163,6 +183,9 @@ function bindEvents() {
     t = setTimeout(() => { searchTerm = e.target.value.trim().toLowerCase(); renderRanking(); }, 120);
   });
   $("#csvExport").addEventListener("click", exportCsv);
+  $("#shareX").addEventListener("click", () => shareDetail("x"));
+  $("#shareNotes").addEventListener("click", () => shareDetail("notes"));
+  $("#copyDetailUrl").addEventListener("click", () => shareDetail("copy"));
 }
 
 function currentPeriod() {
@@ -203,10 +226,29 @@ function sortPublishers(list) {
   return arr;
 }
 
+function scoreCompare(a, b, period) {
+  const sa = scoreValue(a, period);
+  const sb = scoreValue(b, period);
+  if (sa.score !== sb.score) return sb.score - sa.score;
+  if (a.top10 !== b.top10) return b.top10 - a.top10;
+  if (a.days !== b.days) return b.days - a.days;
+  if (a.avg_rank !== b.avg_rank) return a.avg_rank - b.avg_rank;
+  return tieBreak(a, b);
+}
+
+function scoreRankMap(list, period) {
+  const map = {};
+  list.slice().sort((a, b) => scoreCompare(a, b, period)).forEach((p, i) => {
+    map[p.host] = i + 1;
+  });
+  return map;
+}
+
 function renderRanking() {
   const period = currentPeriod();
+  const scoreRanks = scoreRankMap(period.publishers || [], period);
   $("#periodNote").textContent =
-    `${period.label}：${period.start} 〜 ${period.end}（${period.days}日間・${period.entries}件）／ 見出しクリックで並べ替え・行クリックで順位推移`;
+    `${period.label}：${period.start} 〜 ${period.end}（${period.days}日間・${period.entries}件）／ 見出しクリックで並べ替え・詳細ボタンで順位推移`;
 
   let list = period.publishers;
   if (searchTerm) {
@@ -229,6 +271,7 @@ function renderRanking() {
   $("#emptyNote").hidden = list.length > 0;
   body.innerHTML = list.map((p, i) => {
     const idx = i + 1;
+    const rank = scoreRanks[p.host] || "–";
     const link = p.url
       ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>`
       : `<span>${esc(p.name)}</span>`;
@@ -238,6 +281,13 @@ function renderRanking() {
       <td class="col-idx"><span class="rank-num">${idx}</span></td>
       <td class="col-avatar">${avatarHtml(p)}</td>
       <td class="col-name ${"name" === sortKey ? "is-sorted" : ""}">${link}${host}</td>
+      <td class="col-action">
+        <button type="button" class="detail-btn" data-detail-host="${esc(p.host)}" aria-label="${esc(p.name)} の詳細と順位推移を開く">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 12.5h11"/><path d="M5 11l3-3 2.2 1.8L12.5 6"/><path d="M12.5 6v4"/><path d="M12.5 6h-4"/></svg>
+          <span>詳細</span>
+        </button>
+      </td>
+      <td><span class="score-rank-badge">#${rank}</span></td>
       <td class="${c("days")}">${p.days}</td>
       <td class="${c("top1")} ${p.top1 ? "hot" : ""}">${p.top1}</td>
       <td class="${c("top3")}">${p.top3}</td>
@@ -274,7 +324,7 @@ function scoreLabel(score) {
   return "幕内級";
 }
 
-function scoreHtml(p, period, compact = false) {
+function scoreHtml(p, period, compact = false, scoreRank = null) {
   const s = scoreValue(p, period);
   const label = scoreLabel(s.score);
   return `<div class="score-main${compact ? " compact" : ""}">
@@ -282,6 +332,7 @@ function scoreHtml(p, period, compact = false) {
     <div class="score-copy">
       <b>${esc(label)}</b>
       <span>${esc(period.label)}でTop10回数 ${s.top10Rank}位。登場日のTop10率 ${s.top10Rate}%、番付への継続登場率 ${s.continuity}%。</span>
+      <small class="score-rank-line">${scoreRank ? `偏差値順位 ${scoreRank}位` : "偏差値順位を計算中…"}</small>
       <small>算出: Top10回数の相対順位 + 登場継続率 + 平均順位</small>
     </div>
   </div>`;
@@ -296,11 +347,12 @@ function renderScorePanel(period, visibleList) {
     return;
   }
   const p = visibleList[0];
+  const ranks = scoreRankMap(period.publishers || [], period);
   panel.hidden = false;
   panel.innerHTML = `<div class="score-panel-head">
     <span class="score-eyebrow">自分の番付偏差値</span>
     <button type="button" data-detail-host="${esc(p.host)}">詳細を見る</button>
-  </div>${scoreHtml(p, period)}`;
+  </div>${scoreHtml(p, period, false, ranks[p.host])}`;
   const btn = panel.querySelector("[data-detail-host]");
   if (btn) btn.addEventListener("click", () => openDetail(btn.dataset.detailHost));
 }
@@ -478,6 +530,8 @@ function renderNewcomers(period) {
     .filter((p) => p.first_date)
     .sort((a, b) => String(b.first_date).localeCompare(String(a.first_date)) || (a.best_rank - b.best_rank) || tieBreak(a, b))
     .slice(0, 12);
+  const note = $("#newcomerNote");
+  if (note) note.textContent = `${period.label}で初めて番付入りした発行元の一覧`;
   $("#newcomerTable").innerHTML =
     `<thead><tr><th style="text-align:left">発行元</th><th>初登場</th><th>登場日数</th><th>Top10</th><th>最高順位</th></tr></thead>` +
     "<tbody>" + list.map((p) =>
@@ -503,6 +557,8 @@ function renderRisers() {
     .filter((p) => p.top10 > 0 && p.rise > 0)
     .sort((a, b) => (b.rise - a.rise) || (b.top10 - a.top10) || tieBreak(a, b))
     .slice(0, 12);
+  const note = $("#riserNote");
+  if (note) note.textContent = "直近7日のTop10入りと累積順位を比べた急上昇リスト";
   $("#riserTable").innerHTML =
     `<thead><tr><th style="text-align:left">発行元</th><th>7日順位</th><th>累積順位</th><th>上昇</th><th>Top10</th></tr></thead>` +
     "<tbody>" + risers.map((p) =>
@@ -548,7 +604,7 @@ function closeDetail() {
   }
 }
 
-function statChips(p) {
+function statChips(p, extra = []) {
   const items = [
     ["登場日数", p.days + "日"],
     ["最高順位", p.best_rank ? p.best_rank + "位" : "–"],
@@ -558,10 +614,64 @@ function statChips(p) {
     ["Top10", p.top10 + "回"],
     ["平均注目度", p.avg_attention],
     ["平均❤️", p.avg_likes],
-  ];
+  ].concat(extra);
   return items.map(([l, v]) =>
     `<div class="dm-stat"><span class="dm-stat-v">${esc(String(v))}</span><span class="dm-stat-l">${esc(l)}</span></div>`
   ).join("");
+}
+
+function detailShareUrl(host, periodKey = activePeriodKey) {
+  const url = new URL(location.href);
+  url.searchParams.set(PERIOD_PARAM, periodKey);
+  url.searchParams.set(DETAIL_PARAM, host);
+  if (!url.hash) url.hash = location.hash || "#ranking";
+  return url.toString();
+}
+
+function detailShareText(host, kind = "x") {
+  const period = currentPeriod();
+  const periodPub = (period.publishers || []).find((p) => p.host === host) || cumByHost[host];
+  if (!periodPub) return "";
+  const ranks = scoreRankMap(period.publishers || [], period);
+  const s = scoreValue(periodPub, period);
+  const label = scoreLabel(s.score);
+  const url = detailShareUrl(host, period.key);
+  const lines = [
+    `${periodPub.name}｜${period.label}`,
+    `偏差値 ${s.score}（${label}） / 偏差値順位 ${ranks[host] || "–"}位`,
+    `Top10回数 ${s.top10Rank}位・登場日のTop10率 ${s.top10Rate}%`,
+  ];
+  if (kind === "notes") return [...lines, url].join("\n");
+  return lines.join(" ");
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  document.execCommand("copy");
+  ta.remove();
+}
+
+async function shareDetail(kind) {
+  const host = $("#dmName").dataset.host || ($("#dmHost").textContent || "");
+  if (!host) return;
+  const text = detailShareText(host, kind);
+  const url = detailShareUrl(host, activePeriodKey);
+  if (kind === "x") {
+    const intent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+    window.open(intent, "_blank", "noopener");
+    return;
+  }
+  await copyTextToClipboard(kind === "copy" ? url : text);
 }
 
 function buildRankChart(apps) {
@@ -594,13 +704,15 @@ async function openDetail(host, opts = {}) {
   const logo = (DATA.logos && DATA.logos[host]) || "";
   $("#dmName").textContent = name;
   $("#dmName").href = url;
+  $("#dmName").dataset.host = host;
   $("#dmHost").textContent = host;
   const av = $("#dmAvatar");
   if (logo) { av.src = logo; av.style.display = ""; } else { av.style.display = "none"; }
-  $("#dmStats").innerHTML = cum ? statChips(cum) : "";
   const period = currentPeriod();
   const periodPub = (period.publishers || []).find((p) => p.host === host) || cum;
-  $("#dmScore").innerHTML = periodPub ? scoreHtml(periodPub, period, true) : "";
+  const ranks = scoreRankMap(period.publishers || [], period);
+  $("#dmStats").innerHTML = cum ? statChips(cum, periodPub ? [["偏差値順位", `${ranks[host] || "–"}位`]] : []) : "";
+  $("#dmScore").innerHTML = periodPub ? scoreHtml(periodPub, period, true, ranks[host]) : "";
   $("#dmChartSub").textContent = "";
   $("#dmChart").innerHTML = '<div class="dm-loading">読み込み中…</div>';
   $("#dmHistory").innerHTML = "";

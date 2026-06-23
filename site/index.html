@@ -38,9 +38,41 @@
 
 <main class="wrap">
   <nav class="tabs" id="viewTabs">
-    <button class="tab is-active" data-view="ranking"><span class="tab-no">壱</span>発行元ランキング</button>
-    <button class="tab" data-view="trends"><span class="tab-no">弐</span>番付トレンド</button>
-    <button class="tab" data-view="daily"><span class="tab-no">参</span>日別TOP30</button>
+    <button class="tab is-active" data-view="ranking">
+      <span class="tab-no">壱</span>
+      <span class="tab-ic" aria-hidden="true">
+        <svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M2 7.5h12M5 3v10M10.5 3v10"/></svg>
+      </span>
+      <span>発行元ランキング</span>
+    </button>
+    <button class="tab" data-view="trends">
+      <span class="tab-no">弐</span>
+      <span class="tab-ic" aria-hidden="true">
+        <svg viewBox="0 0 16 16"><path d="M2 12.5h12"/><path d="M3 11l3-3 2.2 1.8L13 5"/><path d="M13 5v4"/><path d="M13 5h-4"/></svg>
+      </span>
+      <span>番付トレンド</span>
+    </button>
+    <button class="tab" data-view="daily">
+      <span class="tab-no">参</span>
+      <span class="tab-ic" aria-hidden="true">
+        <svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6h12M5 2v3M11 2v3"/></svg>
+      </span>
+      <span>日別TOP30</span>
+    </button>
+    <button class="tab" data-view="risers">
+      <span class="tab-no">四</span>
+      <span class="tab-ic" aria-hidden="true">
+        <svg viewBox="0 0 16 16"><path d="M2 12.5h12"/><path d="M4 10l3-3 2.2 1.8L12 5"/><path d="M12 5v4"/><path d="M12 5h-4"/></svg>
+      </span>
+      <span>急上昇</span>
+    </button>
+    <button class="tab" data-view="newcomers">
+      <span class="tab-no">五</span>
+      <span class="tab-ic" aria-hidden="true">
+        <svg viewBox="0 0 16 16"><path d="M8 2.3l1.7 3.45 3.8.55-2.75 2.68.65 3.78L8 10.95 4.6 12.76l.65-3.78L2.5 6.3l3.8-.55z"/></svg>
+      </span>
+      <span>初登場</span>
+    </button>
   </nav>
 
   <!-- ランキングビュー -->
@@ -61,6 +93,8 @@
             <th class="col-idx">#</th>
             <th class="col-avatar" aria-label="アイコン"></th>
             <th class="col-name" data-sort="name">発行元</th>
+            <th class="col-action">詳細</th>
+            <th class="num">偏差値<br>順位</th>
             <th class="num" data-sort="days">登場<br>日数</th>
             <th class="num" data-sort="top1">1位</th>
             <th class="num" data-sort="top3">Top3</th>
@@ -117,20 +151,6 @@
           <table class="rank-table compact" id="compareTable"></table>
         </div>
       </div>
-      <div class="card">
-        <h3>初登場発行元</h3>
-        <p class="card-note">この期間で最初に番付入りした発行元をまとめて表示します。</p>
-        <div class="table-scroll">
-          <table class="rank-table compact" id="newcomerTable"></table>
-        </div>
-      </div>
-      <div class="card">
-        <h3>急上昇発行元</h3>
-        <p class="card-note">直近7日のTop10入りが強く、累積順位より上に来ている発行元。</p>
-        <div class="table-scroll">
-          <table class="rank-table compact" id="riserTable"></table>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -161,6 +181,45 @@
       </table>
     </div>
   </section>
+
+  <!-- 急上昇ビュー -->
+  <section id="riserView" hidden>
+    <div class="controls">
+      <div class="period-tabs" id="periodTabsRisers"></div>
+    </div>
+    <p class="period-note" id="riserNote"></p>
+    <div class="table-scroll">
+      <table class="rank-table" id="riserTable"></table>
+    </div>
+  </section>
+
+  <!-- 初登場ビュー -->
+  <section id="newcomerView" hidden>
+    <div class="controls">
+      <div class="period-tabs" id="periodTabsNewcomers"></div>
+    </div>
+    <p class="period-note" id="newcomerNote"></p>
+    <div class="table-scroll">
+      <table class="rank-table" id="newcomerTable"></table>
+    </div>
+  </section>
+
+  <section class="score-guide" id="scoreGuide">
+    <div class="guide-card">
+      <p class="guide-eyebrow">番付偏差値</p>
+      <h2>計算方法を公開しています</h2>
+      <p class="guide-lead">偏差値は、Top10回数の相対順位、登場継続率、平均順位を合わせて作っています。見た目の勢いではなく、継続して上位に残る強さを重く見ています。</p>
+      <div class="guide-formula">
+        <code>score = round(45 + pct × 25 + continuity × 18 + rankPower × 12)</code>
+      </div>
+      <ul class="guide-points">
+        <li>Top10回数の相対順位（pct）: その期間で、他の発行元に比べてどれだけTop10入りしているか。</li>
+        <li>継続率（continuity）: 登場日数 ÷ その期間の日数。</li>
+        <li>平均順位係数（rankPower）: max(0, (31 - 平均順位) ÷ 30)。平均順位が良いほど加点されます。</li>
+        <li>偏差値順位: 同じ期間の発行元を、偏差値スコアで並べた順位です。</li>
+      </ul>
+    </div>
+  </section>
 </main>
 
 <!-- 発行元 詳細モーダル -->
@@ -173,6 +232,20 @@
         <a class="dm-name" id="dmName" href="#" target="_blank" rel="noopener"></a>
         <span class="dm-host" id="dmHost"></span>
       </div>
+    </div>
+    <div class="dm-actions">
+      <button class="dm-share-btn" id="shareX" type="button">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10"/><path d="M13 3L3 13"/></svg>
+        <span>Xで共有</span>
+      </button>
+      <button class="dm-share-btn" id="shareNotes" type="button">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3h8l2 2v8H3z"/><path d="M5 6h6"/><path d="M5 8.5h6"/><path d="M5 11h4"/></svg>
+        <span>Notes用にコピー</span>
+      </button>
+      <button class="dm-share-btn" id="copyDetailUrl" type="button">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 5H4.5A1.5 1.5 0 003 6.5v6A1.5 1.5 0 004.5 14h6A1.5 1.5 0 0012 12.5V11"/><path d="M9 2h4v4"/><path d="M13 2L7 8"/></svg>
+        <span>URLをコピー</span>
+      </button>
     </div>
     <div class="dm-stats" id="dmStats"></div>
     <div class="dm-score" id="dmScore"></div>
@@ -198,6 +271,7 @@
       </span>
     </a>
     <p>データ出典：<a id="srcLink" href="https://substackbanzuke.com/" target="_blank" rel="noopener">Substack番付（substackbanzuke.com）</a></p>
+    <p><a href="#scoreGuide">偏差値の計算方法</a></p>
     <p class="disclaimer">本サイトは Substack番付 のデータを個人が集計した<b>非公式</b>のスタッツサイトです。各発行元名はそれぞれのSubstackへのリンクです。</p>
     <p class="gen" id="genAt"></p>
   </div>
