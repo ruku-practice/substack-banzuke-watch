@@ -512,7 +512,7 @@ function renderRanking() {
   }).join("");
 }
 
-// 期間ごとに「番付スコア（生の強さ）」と母集団の平均・標準偏差をキャッシュ計算。
+// 期間ごとに Top10相対順位マップを一度だけ計算してキャッシュ。
 function periodComputed(period) {
   if (period._sc) return period._sc;
   const pubs = period.publishers || [];
@@ -520,54 +520,34 @@ function periodComputed(period) {
   const byTop10 = pubs.slice().sort((a, b) => (b.top10 - a.top10) || tieBreak(a, b));
   const top10RankMap = {};
   byTop10.forEach((p, i) => { top10RankMap[p.host] = i + 1; });
-  const raws = {};
-  let sum = 0;
-  for (const p of pubs) {
-    raws[p.host] = rawStrength(p, period, top10RankMap[p.host] || N, N);
-    sum += raws[p.host];
-  }
-  const mean = N ? sum / N : 0;
-  let v = 0;
-  for (const p of pubs) { const d = raws[p.host] - mean; v += d * d; }
-  const std = N ? Math.sqrt(v / N) : 0;
-  const sc = { top10RankMap, raws, mean, std, N };
+  const sc = { top10RankMap, N };
   try { Object.defineProperty(period, "_sc", { value: sc, enumerable: false, configurable: true }); }
   catch (e) { period._sc = sc; }
   return sc;
 }
 
-// 番付スコア（生の強さ）: Top10相対順位・登場継続率・平均順位の重み付け合算。
-function rawStrength(p, period, top10Rank, N) {
-  const pct = N > 1 ? (N - top10Rank) / (N - 1) : 1;
-  const continuity = period.days ? Math.min(1, p.days / period.days) : 0;
-  const rankPower = p.avg_rank ? Math.max(0, (31 - p.avg_rank) / 30) : 0;
-  return 45 + pct * 25 + continuity * 18 + rankPower * 12;
-}
-
-// 偏差値（T得点）= 50 + 10×(番付スコア − 平均) ÷ 標準偏差
+// つみあげスコア: Top10相対順位・登場継続率・平均順位の重み付け合算（その期間の強さ）。
 function scoreValue(p, period) {
   const sc = periodComputed(period);
-  let raw = sc.raws[p.host];
-  let top10Rank = sc.top10RankMap[p.host];
-  if (raw === undefined) { top10Rank = sc.N + 1; raw = rawStrength(p, period, top10Rank, sc.N); }
-  let dev = sc.std > 0 ? 50 + 10 * (raw - sc.mean) / sc.std : 50;
-  dev = Math.round(Math.max(25, Math.min(85, dev)));
+  const top10Rank = sc.top10RankMap[p.host] || sc.N;
+  const pct = sc.N > 1 ? (sc.N - top10Rank) / (sc.N - 1) : 1;
+  const continuity = period.days ? Math.min(1, p.days / period.days) : 0;
+  const rankPower = p.avg_rank ? Math.max(0, (31 - p.avg_rank) / 30) : 0;
   return {
-    score: dev,             // 本物の偏差値（T得点）
-    raw: Math.round(raw),   // 番付スコア（生の強さ）
-    top10Rank: top10Rank || sc.N,
+    score: Math.round(45 + pct * 25 + continuity * 18 + rankPower * 12),
+    top10Rank,
     top10Rate: p.days ? Math.round((p.top10 / p.days) * 100) : 0,
-    continuity: period.days ? Math.round(Math.min(1, p.days / period.days) * 100) : 0,
+    continuity: Math.round(continuity * 100),
   };
 }
 
-function scoreLabel(dev) {
-  if (dev >= 70) return "横綱級";
-  if (dev >= 65) return "大関級";
-  if (dev >= 60) return "関脇級";
-  if (dev >= 55) return "小結級";
-  if (dev >= 50) return "前頭級";
-  if (dev >= 45) return "十両級";
+function scoreLabel(s) {
+  if (s >= 88) return "横綱級";
+  if (s >= 82) return "大関級";
+  if (s >= 75) return "関脇級";
+  if (s >= 68) return "小結級";
+  if (s >= 60) return "前頭級";
+  if (s >= 52) return "十両級";
   return "幕下級";
 }
 
@@ -575,12 +555,12 @@ function scoreHtml(p, period, compact = false, scoreRank = null) {
   const s = scoreValue(p, period);
   const label = scoreLabel(s.score);
   return `<div class="score-main${compact ? " compact" : ""}">
-    <div class="score-ring" aria-label="番付偏差値 ${s.score}"><span>${s.score}</span><small>偏差値</small></div>
+    <div class="score-ring" aria-label="つみあげスコア ${s.score}"><span>${s.score}</span><small>スコア</small></div>
     <div class="score-copy">
       <b>${esc(label)}</b>
       <span>${esc(period.label)}でTop10回数 ${s.top10Rank}位。登場日のTop10率 ${s.top10Rate}%、番付への継続登場率 ${s.continuity}%。</span>
-      <small class="score-rank-line">偏差値 ${s.score}（${esc(label)}）${scoreRank ? ` / 偏差値順位 ${scoreRank}位` : ""} ・ 番付スコア ${s.raw}</small>
-      <small>偏差値＝番付スコア（Top10相対順位＋登場継続率＋平均順位）を、その期間の全発行元で標準化したT得点（平均50）</small>
+      <small class="score-rank-line">つみあげスコア ${s.score}（${esc(label)}）${scoreRank ? ` / スコア順位 ${scoreRank}位` : ""}</small>
+      <small>算出: Top10回数の相対順位 ＋ 登場継続率 ＋ 平均順位（日々の好成績の"つみあげ"を点数化）</small>
     </div>
   </div>`;
 }
@@ -597,7 +577,7 @@ function renderScorePanel(period, visibleList) {
   const ranks = scoreRankMap(period.publishers || [], period);
   panel.hidden = false;
   panel.innerHTML = `<div class="score-panel-head">
-    <span class="score-eyebrow">自分の番付偏差値</span>
+    <span class="score-eyebrow">自分のつみあげスコア</span>
     <button type="button" data-detail-host="${esc(p.host)}">詳細を見る</button>
   </div>${scoreHtml(p, period, false, ranks[p.host])}`;
   const btn = panel.querySelector("[data-detail-host]");
@@ -699,7 +679,7 @@ function renderCompare() {
     ["平均順位", `${sa.avg_rank}位`, `${sb.avg_rank}位`],
     ["最高順位", `${sa.best_rank}位`, `${sb.best_rank}位`],
     ["平均注目度", sa.avg_attention, sb.avg_attention],
-    ["番付偏差値", `${sa.score} (${sa.label})`, `${sb.score} (${sb.label})`],
+    ["つみあげスコア", `${sa.score} (${sa.label})`, `${sb.score} (${sb.label})`],
   ];
   $("#compareTable").innerHTML =
     `<thead><tr><th style="text-align:left">項目</th><th style="text-align:left">${esc(sa.name)}</th><th style="text-align:left">${esc(sb.name)}</th></tr></thead>` +
@@ -783,7 +763,7 @@ function renderNewcomers(period) {
   const headerRow =
     `<thead><tr><th class="col-avatar"></th><th class="col-name" style="text-align:left">発行元</th><th class="col-action">詳細</th>` +
     `<th class="num">初登場</th><th class="num">登場<br>日数</th><th class="num">Top10</th><th class="num">最高<br>順位</th>` +
-    `<th class="num">平均<br>順位</th><th class="num">平均<br>注目度</th><th class="num col-score">番付<br>偏差値</th></tr></thead>`;
+    `<th class="num">平均<br>順位</th><th class="num">平均<br>注目度</th><th class="num col-score">つみあげ<br>スコア</th></tr></thead>`;
   if (!list.length) {
     $("#newcomerTable").innerHTML = headerRow +
       `<tbody><tr><td colspan="10" style="text-align:center;color:var(--ink-3);padding:22px 8px">この期間に初登場の発行元はありません。</td></tr></tbody>`;
@@ -835,7 +815,7 @@ function renderRisers() {
   const headerRow =
     `<thead><tr><th class="col-avatar"></th><th class="col-name" style="text-align:left">発行元</th><th class="col-action">詳細</th>` +
     `<th class="num">上昇</th><th class="num">${esc(period.label)}<br>順位</th><th class="num">累積<br>順位</th>` +
-    `<th class="num">Top10</th><th class="num">平均<br>順位</th><th class="num">平均<br>注目度</th><th class="num col-score">番付<br>偏差値</th></tr></thead>`;
+    `<th class="num">Top10</th><th class="num">平均<br>順位</th><th class="num">平均<br>注目度</th><th class="num col-score">つみあげ<br>スコア</th></tr></thead>`;
   if (!risers.length) {
     $("#riserTable").innerHTML = headerRow +
       `<tbody><tr><td colspan="10" style="text-align:center;color:var(--ink-3);padding:22px 8px">` +
@@ -935,7 +915,7 @@ function detailShareText(host, kind = "x") {
   const url = detailShareUrl(host, period.key);
   const lines = [
     `${periodPub.name}｜${period.label}`,
-    `偏差値 ${s.score}（${label}） / 偏差値順位 ${ranks[host] || "–"}位`,
+    `つみあげスコア ${s.score}（${label}） / スコア順位 ${ranks[host] || "–"}位`,
     `Top10回数 ${s.top10Rank}位・登場日のTop10率 ${s.top10Rate}%`,
   ];
   if (kind === "notes") return [...lines, url].join("\n");
@@ -1053,7 +1033,7 @@ async function generateShareCard(host) {
   ctx.fillStyle = "#5c5448"; ctx.font = `700 22px ${UI}`;
   ctx.fillText(period.label, 210, 178);
 
-  // 偏差値リング（右上）
+  // スコアリング（右上）
   const cx = 952, cy = 116, rr = 66;
   ctx.lineWidth = 12; ctx.lineCap = "round";
   ctx.strokeStyle = "#f0e3d2"; ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2); ctx.stroke();
@@ -1062,7 +1042,7 @@ async function generateShareCard(host) {
   ctx.arc(cx, cy, rr, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2); ctx.stroke();
   ctx.textAlign = "center";
   ctx.fillStyle = "#c94b00"; ctx.font = `600 52px ${NUM}`; ctx.fillText(String(s.score), cx, cy + 8);
-  ctx.fillStyle = "#8a8174"; ctx.font = `700 17px ${UI}`; ctx.fillText("番付偏差値", cx, cy + 36);
+  ctx.fillStyle = "#8a8174"; ctx.font = `700 17px ${UI}`; ctx.fillText("つみあげスコア", cx, cy + 36);
   ctx.fillStyle = "#c94b00"; ctx.font = `700 24px ${UI}`; ctx.fillText(label, cx, cy - rr - 16);
 
   // スタッツ10枠（5列×2行・モーダルと同内容）
@@ -1076,7 +1056,7 @@ async function generateShareCard(host) {
     ["平均注目度", String(pub.avg_attention)],
     ["平均❤️", String(pub.avg_likes)],
     ["平均Restack", String(pub.avg_restacks)],
-    ["偏差値順位", scoreRank + "位"],
+    ["スコア順位", scoreRank + "位"],
   ];
   const bx0 = 64, by0 = 244, bh = 108, gap = 18, rgap = 16, bw = (W - 128 - gap * 4) / 5;
   stats.forEach(([l, v], i) => {
@@ -1206,7 +1186,7 @@ async function openDetail(host, opts = {}) {
   const period = currentPeriod();
   const periodPub = (period.publishers || []).find((p) => p.host === host) || cum;
   const ranks = scoreRankMap(period.publishers || [], period);
-  $("#dmStats").innerHTML = cum ? statChips(cum, periodPub ? [["偏差値順位", `${ranks[host] || "–"}位`]] : []) : "";
+  $("#dmStats").innerHTML = cum ? statChips(cum, periodPub ? [["スコア順位", `${ranks[host] || "–"}位`]] : []) : "";
   $("#dmScore").innerHTML = periodPub ? scoreHtml(periodPub, period, true, ranks[host]) : "";
   $("#dmChartSub").textContent = "";
   $("#dmChart").innerHTML = '<div class="dm-loading">読み込み中…</div>';

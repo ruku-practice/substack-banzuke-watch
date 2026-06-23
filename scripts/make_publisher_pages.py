@@ -100,13 +100,13 @@ def raw_strength(pub, top10_rank, n, period_days):
     return 45 + pct * 25 + continuity * 18 + rank_power * 12
 
 
-def score_label(dev):
-    if dev >= 70: return "横綱級"
-    if dev >= 65: return "大関級"
-    if dev >= 60: return "関脇級"
-    if dev >= 55: return "小結級"
-    if dev >= 50: return "前頭級"
-    if dev >= 45: return "十両級"
+def score_label(s):
+    if s >= 88: return "横綱級"
+    if s >= 82: return "大関級"
+    if s >= 75: return "関脇級"
+    if s >= 68: return "小結級"
+    if s >= 60: return "前頭級"
+    if s >= 52: return "十両級"
     return "幕下級"
 
 
@@ -136,7 +136,7 @@ def draw_card(pub, score, label, score_rank, avatar):
     d.text((228, 134), trunc(d, pub["host"], font(26, False), 660), font=font(26, False), fill=INK3)
     d.text((228, 176), "累積（全期間）の番付スタッツ", font=font(24), fill=INK2)
 
-    # 偏差値リング
+    # スコアリング
     cx, cy, rr = 1058, 128, 74
     d.ellipse((cx - rr, cy - rr, cx + rr, cy + rr), outline=(240, 227, 210), width=14)
     # 進捗弧
@@ -145,7 +145,7 @@ def draw_card(pub, score, label, score_rank, avatar):
     bbox = (cx - rr, cy - rr, cx + rr, cy + rr)
     d.arc(bbox, -90, -90 + frac * 360, fill=ACC, width=14)
     d.text((cx, cy - 6), str(score), font=font(56), fill=ACC2, anchor="mm")
-    d.text((cx, cy + 34), "番付偏差値", font=font(18), fill=INK3, anchor="mm")
+    d.text((cx, cy + 34), "つみあげスコア", font=font(16), fill=INK3, anchor="mm")
     d.text((cx, cy - rr - 18), label, font=font(26), fill=ACC2, anchor="mm")
 
     # スタッツ 10枠（5×2）
@@ -159,7 +159,7 @@ def draw_card(pub, score, label, score_rank, avatar):
         ("平均注目度", str(pub["avg_attention"])),
         ("平均いいね", str(pub["avg_likes"])),
         ("平均Restack", str(pub["avg_restacks"])),
-        ("偏差値順位", f"{score_rank}位"),
+        ("スコア順位", f"{score_rank}位"),
     ]
     bx0, by0, bh, gap, rgap = 70, 248, 100, 18, 16
     bw = (W - 140 - gap * 4) / 5
@@ -217,23 +217,13 @@ def main():
     period_days = cum["days"]
 
     # cumulative.publishers は既に Top10降順（同点 ruku→host）で並ぶ＝top10_rank=index+1
-    # まず番付スコア（生）を全件算出 → 平均・標準偏差で偏差値（T得点）化する
-    valid = [(i, p) for i, p in enumerate(pubs) if p.get("host")]
-    raws = {p["host"]: raw_strength(p, i + 1, n, period_days) for i, p in valid}
-    vals = list(raws.values())
-    m = len(vals)
-    mean = sum(vals) / m if m else 0
-    std = (sum((x - mean) ** 2 for x in vals) / m) ** 0.5 if m else 0
-
-    def deviation(host):
-        if std <= 0:
-            return 50
-        return round(max(25, min(85, 50 + 10 * (raws[host] - mean) / std)))
-
     scored = []
-    for i, p in valid:
-        scored.append((deviation(p["host"]), p))
-    # 偏差値順位
+    for i, p in enumerate(pubs):
+        if not p.get("host"):
+            continue
+        s = round(raw_strength(p, i + 1, n, period_days))
+        scored.append((s, p))
+    # スコア順位
     order = sorted(range(len(scored)), key=lambda k: -scored[k][0])
     rank_of = {}
     for r, k in enumerate(order):
@@ -261,10 +251,10 @@ def main():
         img = draw_card(p, s, label, srank, avatars.get(host))
         img.save(os.path.join(CARDS_DIR, host + ".png"), "PNG")
 
-        desc = (f"偏差値{s}（{label}）/ 偏差値順位{srank}位 ・ Top10 {p['top10']}回 / "
+        desc = (f"つみあげスコア{s}（{label}）/ スコア順位{srank}位 ・ Top10 {p['top10']}回 / "
                 f"最高{p.get('best_rank') or '–'}位 / 平均{p['avg_rank']}位。"
                 "Substack番付の日々のTOP30を累積した非公式スタッツ。")
-        ogtitle = f"{p['name']}｜番付偏差値 {s}（{label}）"
+        ogtitle = f"{p['name']}｜つみあげスコア {s}（{label}）"
         pdir = os.path.join(P_DIR, host)
         os.makedirs(pdir, exist_ok=True)
         with open(os.path.join(pdir, "index.html"), "w", encoding="utf-8") as f:

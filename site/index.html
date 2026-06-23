@@ -23,7 +23,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Zen+Old+Mincho:wght@600;700;900&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260624-1">
+<link rel="stylesheet" href="style.css?v=20260624-2">
 </head>
 <body>
 <header class="hero">
@@ -39,7 +39,7 @@
       <li><span class="pitch-ic">🔍</span><span><b>読む人へ</b>継続的に良い記事を出している書き手を見つけてフォローできる</span></li>
     </ul>
     <div class="meta-bar" id="metaBar"></div>
-    <a class="score-guide-link" href="#scoreGuide">📐 番付偏差値の計算方法</a>
+    <a class="score-guide-link" href="#scoreGuide">📐 つみあげスコアの計算方法</a>
   </div>
 </header>
 
@@ -110,7 +110,7 @@
             <th class="num" data-sort="avg_likes">平均<br>❤️</th>
             <th class="num" data-sort="avg_restacks">平均<br>Restack</th>
             <th class="num" data-sort="avg_comments">平均<br>コメント</th>
-            <th class="num col-score" data-sort="score">番付<br>偏差値</th>
+            <th class="num col-score" data-sort="score">つみあげ<br>スコア</th>
           </tr>
         </thead>
         <tbody id="rankBody"></tbody>
@@ -218,20 +218,17 @@
 
   <section class="score-guide" id="scoreGuide">
     <div class="guide-card">
-      <h2>番付偏差値の計算方法</h2>
-      <p class="guide-lead">通常の<b>偏差値（T得点）</b>と同じく、<b>平均を50・標準偏差を基準</b>に各発行元の相対位置を表します。まず「番付スコア（生の強さ）」を出し、それをその期間の全発行元で標準化します。</p>
+      <h2>つみあげスコアの計算方法</h2>
+      <p class="guide-lead">つみあげスコアは、<b>Top10回数の相対順位・登場継続率・平均順位</b>を合わせた、<b>日々の好成績の"つみあげ"</b>を点数化した独自指標です（Substack番付の公式指標ではありません）。見た目の勢いより、<b>継続して上位に残る強さ</b>を重く見ています。</p>
       <div class="guide-formula">
-        <code>① 番付スコア = 45 + pct × 25 + continuity × 18 + rankPower × 12</code>
-      </div>
-      <div class="guide-formula">
-        <code>② 偏差値 = 50 + 10 × ( 番付スコア − 平均 ) ÷ 標準偏差</code>
+        <code>score = round( 45 + pct × 25 + continuity × 18 + rankPower × 12 )</code>
       </div>
       <ul class="guide-points">
         <li><b>pct（Top10回数の相対順位）</b>：その期間で、他の発行元に比べてどれだけTop10入りしているか。</li>
         <li><b>continuity（継続率）</b>：登場日数 ÷ その期間の日数。</li>
         <li><b>rankPower（平均順位係数）</b>：max(0, (31 − 平均順位) ÷ 30)。平均順位が良いほど加点。</li>
-        <li><b>偏差値の目安</b>：50＝平均的な発行元、60＝上位約16%、70＝上位約2%。継続して上位に残る強さを重く見ています。</li>
-        <li><b>称号</b>：偏差値70+＝横綱級／65+＝大関級／60+＝関脇級／55+＝小結級／50+＝前頭級／45+＝十両級／45未満＝幕下級。</li>
+        <li><b>スコア順位</b>：同じ期間の発行元を、つみあげスコアで並べた順位です。</li>
+        <li><b>称号</b>：88+＝横綱級／82+＝大関級／75+＝関脇級／68+＝小結級／60+＝前頭級／52+＝十両級／52未満＝幕下級。</li>
       </ul>
     </div>
   </section>
@@ -290,12 +287,12 @@
       </span>
     </a>
     <p>データ出典：<a id="srcLink" href="https://substackbanzuke.com/" target="_blank" rel="noopener">Substack番付（substackbanzuke.com）</a></p>
-    <p><a href="#scoreGuide">偏差値の計算方法</a></p>
+    <p><a href="#scoreGuide">つみあげスコアの計算方法</a></p>
     <p class="disclaimer">本サイトは Substack番付 のデータを個人が集計した<b>非公式</b>のスタッツサイトです。各発行元名はそれぞれのSubstackへのリンクです。</p>
     <p class="gen" id="genAt"></p>
   </div>
 </footer>
 
-<script src="app.js?v=20260624-1"></script>
+<script src="app.js?v=20260624-2"></script>
 </body>
 </html>
