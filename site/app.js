@@ -1,11 +1,23 @@
 "use strict";
 
 let DATA = null;
+let DAILY = null;
+let dailyPromise = null;
+let cumByHost = {};
+let dailyDate = null;
 let activePeriodKey = "cumulative";
 let sortKey = "top10";
 let sortDir = "desc"; // desc | asc
 let searchTerm = "";
 const RUKU_HOST = "rukupractice.substack.com";
+
+function loadDaily() {
+  if (!dailyPromise) {
+    dailyPromise = fetch("daily.json", { cache: "no-cache" })
+      .then((r) => r.json()).then((d) => (DAILY = d));
+  }
+  return dailyPromise;
+}
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -22,18 +34,24 @@ async function init() {
     $("#metaBar").textContent = "データの読み込みに失敗しました。";
     return;
   }
+  const cum = DATA.periods.find((p) => p.key === "cumulative") || DATA.periods[0];
+  (cum.publishers || []).forEach((p) => { cumByHost[p.host] = p; });
   renderMeta();
   renderPeriodTabs();
   bindEvents();
   renderRanking();
   renderTrends();
-  if (location.hash === "#trends") activateView("trends");
+  const h = location.hash;
+  if (h === "#trends") activateView("trends");
+  else if (h === "#daily") activateView("daily");
 }
 
 function activateView(view) {
   $$("#viewTabs .tab").forEach((x) => x.classList.toggle("is-active", x.dataset.view === view));
   $("#rankingView").hidden = view !== "ranking";
   $("#trendsView").hidden = view !== "trends";
+  $("#dailyView").hidden = view !== "daily";
+  if (view === "daily") initDailyView();
 }
 
 function renderMeta() {
@@ -88,8 +106,30 @@ function bindEvents() {
     t.addEventListener("click", () => {
       const v = t.dataset.view;
       activateView(v);
-      history.replaceState(null, "", v === "trends" ? "#trends" : "#");
+      history.replaceState(null, "", v === "ranking" ? "#" : "#" + v);
     }));
+
+  // ランキング行クリック → 発行元詳細（リンククリックは除外）
+  $("#rankBody").addEventListener("click", (e) => {
+    if (e.target.closest("a")) return;
+    const tr = e.target.closest("tr[data-host]");
+    if (tr) openDetail(tr.dataset.host);
+  });
+
+  // 日別ビュー: 前/次・日付選択
+  $("#dayPrev").addEventListener("click", () => stepDay(-1));
+  $("#dayNext").addEventListener("click", () => stepDay(1));
+  $("#daySelect").addEventListener("change", (e) => renderDaily(e.target.value));
+  $("#dailyBody").addEventListener("click", (e) => {
+    if (e.target.closest("a")) return;
+    const tr = e.target.closest("tr[data-host]");
+    if (tr) openDetail(tr.dataset.host);
+  });
+
+  // モーダル閉じる
+  $("#dmClose").addEventListener("click", closeDetail);
+  $("#detailModal").addEventListener("click", (e) => { if (e.target.id === "detailModal") closeDetail(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDetail(); });
   // sortable headers
   $$("#rankTable th[data-sort]").forEach((th) =>
     th.addEventListener("click", () => {
@@ -152,7 +192,7 @@ function sortPublishers(list) {
 function renderRanking() {
   const period = currentPeriod();
   $("#periodNote").textContent =
-    `${period.label}：${period.start} 〜 ${period.end}（${period.days}日間・${period.entries}件）／ 行クリックで並べ替え`;
+    `${period.label}：${period.start} 〜 ${period.end}（${period.days}日間・${period.entries}件）／ 見出しクリックで並べ替え・行クリックで順位推移`;
 
   let list = period.publishers;
   if (searchTerm) {
@@ -178,7 +218,7 @@ function renderRanking() {
       : `<span>${esc(p.name)}</span>`;
     const host = p.host ? `<span class="host">${esc(p.host)}</span>` : "";
     const c = (key) => "c-" + key + (key === sortKey ? " is-sorted" : "");
-    return `<tr class="medal-${idx}">
+    return `<tr class="medal-${idx} row-click" data-host="${esc(p.host)}" title="クリックで詳細・順位推移">
       <td class="col-idx"><span class="rank-num">${idx}</span></td>
       <td class="col-avatar">${avatarHtml(p)}</td>
       <td class="col-name ${"name" === sortKey ? "is-sorted" : ""}">${link}${host}</td>
@@ -227,4 +267,121 @@ function renderTrends() {
     "<tbody>" + cats.map((c) =>
       `<tr><td style="text-align:left">${esc(c.category)}</td><td>${c.top10}</td><td>${c.top3}</td><td>${c.entries}</td><td>${c.avg_attention}</td></tr>`
     ).join("") + "</tbody>";
+}
+
+/* ── 発行元 詳細モーダル ─────────────────────────────── */
+function showModal() { $("#detailModal").hidden = false; document.body.classList.add("modal-open"); }
+function closeDetail() { $("#detailModal").hidden = true; document.body.classList.remove("modal-open"); }
+
+function statChips(p) {
+  const items = [
+    ["登場日数", p.days + "日"],
+    ["最高順位", p.best_rank ? p.best_rank + "位" : "–"],
+    ["平均順位", p.avg_rank + "位"],
+    ["1位", p.top1 + "回"],
+    ["Top3", p.top3 + "回"],
+    ["Top10", p.top10 + "回"],
+    ["平均注目度", p.avg_attention],
+    ["平均❤️", p.avg_likes],
+  ];
+  return items.map(([l, v]) =>
+    `<div class="dm-stat"><span class="dm-stat-v">${esc(String(v))}</span><span class="dm-stat-l">${esc(l)}</span></div>`
+  ).join("");
+}
+
+function buildRankChart(apps) {
+  const dates = DAILY.dates, N = dates.length;
+  const idxOf = {}; dates.forEach((d, i) => (idxOf[d] = i));
+  const W = 640, H = 240, padL = 30, padR = 14, padT = 16, padB = 24;
+  const innerW = W - padL - padR, innerH = H - padT - padB, maxR = 30;
+  const x = (i) => padL + (N <= 1 ? innerW / 2 : (i / (N - 1)) * innerW);
+  const y = (r) => padT + ((Math.min(r, maxR) - 1) / (maxR - 1)) * innerH;
+  const guides = [1, 10, 20, 30].map((r) =>
+    `<line x1="${padL}" y1="${y(r).toFixed(1)}" x2="${W - padR}" y2="${y(r).toFixed(1)}" class="g-grid"/>` +
+    `<text x="${padL - 5}" y="${(y(r) + 3).toFixed(1)}" class="g-lbl" text-anchor="end">${r}</text>`
+  ).join("");
+  const pts = apps.map((a) => `${x(idxOf[a.date]).toFixed(1)},${y(a.r).toFixed(1)}`).join(" ");
+  const line = apps.length > 1 ? `<polyline points="${pts}" class="g-line"/>` : "";
+  const bestR = Math.min(...apps.map((a) => a.r));
+  const dots = apps.map((a) =>
+    `<circle cx="${x(idxOf[a.date]).toFixed(1)}" cy="${y(a.r).toFixed(1)}" r="${a.r === bestR ? 4.5 : 3}" class="g-dot${a.r === bestR ? " g-best" : ""}"><title>${a.date} ${a.r}位</title></circle>`
+  ).join("");
+  const xl = `<text x="${padL}" y="${H - 6}" class="g-lbl">${dates[0].slice(5)}</text>` +
+    `<text x="${W - padR}" y="${H - 6}" class="g-lbl" text-anchor="end">${dates[N - 1].slice(5)}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" class="rank-chart">${guides}${line}${dots}${xl}</svg>`;
+}
+
+async function openDetail(host) {
+  const cum = cumByHost[host];
+  const name = cum ? cum.name : host;
+  const url = cum ? cum.url : "https://" + host + "/";
+  const logo = (DATA.logos && DATA.logos[host]) || "";
+  $("#dmName").textContent = name;
+  $("#dmName").href = url;
+  $("#dmHost").textContent = host;
+  const av = $("#dmAvatar");
+  if (logo) { av.src = logo; av.style.display = ""; } else { av.style.display = "none"; }
+  $("#dmStats").innerHTML = cum ? statChips(cum) : "";
+  $("#dmChartSub").textContent = "";
+  $("#dmChart").innerHTML = '<div class="dm-loading">読み込み中…</div>';
+  $("#dmHistory").innerHTML = "";
+  showModal();
+  await loadDaily();
+  const apps = [];
+  DAILY.dates.forEach((d) => (DAILY.days[d] || []).forEach((e) => { if (e.h === host) apps.push({ date: d, ...e }); }));
+  if (!apps.length) { $("#dmChart").innerHTML = '<div class="dm-loading">データなし</div>'; return; }
+  const bestR = Math.min(...apps.map((a) => a.r));
+  $("#dmChartSub").textContent = `（${apps.length}回登場・最高${bestR}位）`;
+  $("#dmChart").innerHTML = buildRankChart(apps);
+  const desc = apps.slice().reverse().slice(0, 40);
+  $("#dmHistory").innerHTML = desc.map((a) =>
+    `<a class="dm-h-row" href="${esc(a.u)}" target="_blank" rel="noopener">` +
+    `<span class="dm-h-rank medal-${a.r <= 3 ? a.r : "x"}">${a.r}位</span>` +
+    `<span class="dm-h-title">${esc(a.t || "(無題)")}</span>` +
+    `<span class="dm-h-meta">${a.date.slice(5)}・注目度${a.a}</span></a>`
+  ).join("");
+}
+
+/* ── 日別TOP30ビュー ─────────────────────────────────── */
+let dailyInited = false;
+function initDailyView() {
+  loadDaily().then(() => {
+    if (dailyInited) return;
+    dailyInited = true;
+    const sel = $("#daySelect");
+    sel.innerHTML = DAILY.dates.slice().reverse().map((d) => `<option value="${d}">${d}</option>`).join("");
+    renderDaily(DAILY.dates[DAILY.dates.length - 1]);
+  });
+}
+function stepDay(delta) {
+  if (!DAILY) return;
+  const i = DAILY.dates.indexOf(dailyDate);
+  const ni = i + delta;
+  if (ni >= 0 && ni < DAILY.dates.length) renderDaily(DAILY.dates[ni]);
+}
+function avatarByHost(host, name, root) {
+  const logo = (DATA.logos && DATA.logos[host]) || "";
+  const inner = logo
+    ? `<img class="avatar" src="${esc(logo)}" loading="lazy" decoding="async" alt="">`
+    : `<span class="avatar avatar-fallback">${esc((name || "?").trim().charAt(0))}</span>`;
+  return `<a class="avatar-link" href="${esc(root)}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">${inner}</a>`;
+}
+function renderDaily(date) {
+  dailyDate = date;
+  $("#daySelect").value = date;
+  const entries = DAILY.days[date] || [];
+  $("#dailyNote").textContent = `${date} の番付 TOP${entries.length}`;
+  const i = DAILY.dates.indexOf(date);
+  $("#dayPrev").disabled = i <= 0;
+  $("#dayNext").disabled = i >= DAILY.dates.length - 1;
+  $("#dailyBody").innerHTML = entries.map((e) => {
+    const root = "https://" + e.h + "/";
+    return `<tr class="medal-${e.r} row-click" data-host="${esc(e.h)}" title="クリックで詳細・順位推移">
+      <td class="col-idx"><span class="rank-num">${e.r}</span></td>
+      <td class="col-avatar">${avatarByHost(e.h, e.n, root)}</td>
+      <td class="col-name"><a href="${esc(root)}" target="_blank" rel="noopener">${esc(e.n)}</a>` +
+      `<a class="daily-title" href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.t || "(無題)")}</a></td>
+      <td>${e.a}</td><td>${e.l}</td><td>${e.rs}</td><td>${e.c}</td>
+    </tr>`;
+  }).join("");
 }

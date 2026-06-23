@@ -40,6 +40,7 @@
   <nav class="tabs" id="viewTabs">
     <button class="tab is-active" data-view="ranking"><span class="tab-no">壱</span>発行元ランキング</button>
     <button class="tab" data-view="trends"><span class="tab-no">弐</span>番付トレンド</button>
+    <button class="tab" data-view="daily"><span class="tab-no">参</span>日別TOP30</button>
   </nav>
 
   <!-- ランキングビュー -->
@@ -103,7 +104,58 @@
       </div>
     </div>
   </section>
+
+  <!-- 日別TOP30ビュー -->
+  <section id="dailyView" hidden>
+    <div class="controls">
+      <div class="daily-nav">
+        <button class="day-arrow" id="dayPrev" aria-label="前の日">‹</button>
+        <select class="month-select day-select" id="daySelect" aria-label="日付を選ぶ"></select>
+        <button class="day-arrow" id="dayNext" aria-label="次の日">›</button>
+      </div>
+      <p class="period-note" id="dailyNote" style="margin:0"></p>
+    </div>
+    <div class="table-scroll">
+      <table class="rank-table" id="dailyTable">
+        <thead>
+          <tr>
+            <th class="col-idx">#</th>
+            <th class="col-avatar" aria-label="アイコン"></th>
+            <th class="col-name">発行元・記事</th>
+            <th class="num">注目度</th>
+            <th class="num">❤️</th>
+            <th class="num">Restack</th>
+            <th class="num">コメント</th>
+          </tr>
+        </thead>
+        <tbody id="dailyBody"></tbody>
+      </table>
+    </div>
+  </section>
 </main>
+
+<!-- 発行元 詳細モーダル -->
+<div class="modal-backdrop" id="detailModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dmName">
+    <button class="modal-close" id="dmClose" aria-label="閉じる">×</button>
+    <div class="dm-head">
+      <img class="dm-avatar" id="dmAvatar" alt="">
+      <div class="dm-head-text">
+        <a class="dm-name" id="dmName" href="#" target="_blank" rel="noopener"></a>
+        <span class="dm-host" id="dmHost"></span>
+      </div>
+    </div>
+    <div class="dm-stats" id="dmStats"></div>
+    <div class="dm-chart-wrap">
+      <div class="dm-chart-title">番付内 順位の推移 <span id="dmChartSub"></span></div>
+      <div class="dm-chart" id="dmChart"></div>
+    </div>
+    <div class="dm-history-wrap">
+      <div class="dm-chart-title">登場した記事（新しい順）</div>
+      <div class="dm-history" id="dmHistory"></div>
+    </div>
+  </div>
+</div>
 
 <footer class="site-footer">
   <div class="wrap">

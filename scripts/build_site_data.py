@@ -18,6 +18,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "banzuke_full.csv"))
 LOGOS_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "logos.json"))
 OUT_PATH = os.path.normpath(os.path.join(HERE, "..", "site", "data.json"))
+DAILY_PATH = os.path.normpath(os.path.join(HERE, "..", "site", "daily.json"))
 
 SITE_NAME = "Substack番付 つみあげウォッチ"
 RUKU_HOST = "rukupractice.substack.com"
@@ -270,7 +271,24 @@ def main():
     with open(OUT_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
     kb = os.path.getsize(OUT_PATH) / 1024
-    print(f"Wrote {OUT_PATH} ({kb:.0f} KB)")
+
+    # 日次データ（発行元詳細グラフ・日別TOP30ビューア用）を別ファイルに出力。
+    # サイトは必要なときだけ遅延読み込みする（data.json は軽量に保つ）。
+    days = {}
+    for r in rows:
+        days.setdefault(r["date"], []).append({
+            "r": r["rank"], "h": r["host"], "n": r["publisher"], "u": r["url"],
+            "t": r["title"], "a": r["attention"], "l": r["likes"],
+            "rs": r["restacks"], "c": r["comments"], "cat": r["category"],
+        })
+    for d in days:
+        days[d].sort(key=lambda e: e["r"])
+    daily = {"dates": all_dates, "days": days}
+    with open(DAILY_PATH, "w", encoding="utf-8") as f:
+        json.dump(daily, f, ensure_ascii=False, separators=(",", ":"))
+    dkb = os.path.getsize(DAILY_PATH) / 1024
+
+    print(f"Wrote {OUT_PATH} ({kb:.0f} KB) + daily.json ({dkb:.0f} KB)")
     print(f"  range {start}..{end} ({len(all_dates)} days, {len(rows)} entries, "
           f"{data['publisher_count']} publishers)")
     print(f"  periods: {', '.join(p['key'] for p in periods)}")
