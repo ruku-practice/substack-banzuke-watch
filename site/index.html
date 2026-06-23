@@ -49,6 +49,9 @@
             <th class="num" data-sort="top10">Top10</th>
             <th class="num" data-sort="avg_rank">平均<br>順位</th>
             <th class="num" data-sort="avg_attention">平均<br>注目度</th>
+            <th class="num" data-sort="avg_likes">平均<br>❤️</th>
+            <th class="num" data-sort="avg_restacks">平均<br>Restack</th>
+            <th class="num" data-sort="avg_comments">平均<br>コメント</th>
           </tr>
         </thead>
         <tbody id="rankBody"></tbody>
@@ -89,6 +92,14 @@
 
 <footer class="site-footer">
   <div class="wrap">
+    <a class="creator" href="https://rukupractice.substack.com/" target="_blank" rel="noopener">
+      <img class="creator-icon" src="" id="creatorIcon" alt="" loading="lazy" decoding="async">
+      <span class="creator-text">
+        <span class="creator-label">制作者</span>
+        <span class="creator-name">ルク｜踊り場からの再起動日記</span>
+        <span class="creator-sub">rukupractice.substack.com →</span>
+      </span>
+    </a>
     <p>データ出典：<a id="srcLink" href="https://substackbanzuke.com/" target="_blank" rel="noopener">Substack番付（substackbanzuke.com）</a></p>
     <p class="disclaimer">本サイトは Substack番付 のデータを個人が集計した<b>非公式</b>のスタッツサイトです。各発行元名はそれぞれのSubstackへのリンクです。</p>
     <p class="gen" id="genAt"></p>

@@ -5,6 +5,7 @@ let activePeriodKey = "cumulative";
 let sortKey = "top10";
 let sortDir = "desc"; // desc | asc
 let searchTerm = "";
+const RUKU_HOST = "rukupractice.substack.com";
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -43,24 +44,40 @@ function renderMeta() {
   $("#srcLink").href = DATA.source.url;
   const g = new Date(DATA.generated_at);
   $("#genAt").textContent = "最終更新: " + g.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }) + "（毎朝自動更新）";
+  const rukuLogo = DATA.logos && DATA.logos[RUKU_HOST];
+  if (rukuLogo) $("#creatorIcon").src = rukuLogo;
+  else $("#creatorIcon").remove();
 }
 
 function renderPeriodTabs() {
+  const fixed = DATA.periods.filter((p) => !p.is_month);
+  const months = DATA.periods.filter((p) => p.is_month);   // 新しい順（build順）
+  const recentMonths = months.slice(0, 3);                 // 直近3ヶ月はタブ
+  const olderMonths = months.slice(3);                     // それ以前はプルダウン
+
   ["#periodTabs", "#periodTabsTrends"].forEach((sel) => {
     const wrap = $(sel);
     if (!wrap) return;
-    wrap.innerHTML = DATA.periods.map((p) =>
+    let html = fixed.concat(recentMonths).map((p) =>
       `<button data-period="${esc(p.key)}"${p.key === activePeriodKey ? ' class="is-active"' : ""}>${esc(p.label)}</button>`
     ).join("");
+    if (olderMonths.length) {
+      html += `<select class="month-select" aria-label="過去の月を選ぶ"><option value="">過去の月…</option>` +
+        olderMonths.map((p) =>
+          `<option value="${esc(p.key)}"${p.key === activePeriodKey ? " selected" : ""}>${esc(p.label)}</option>`
+        ).join("") + `</select>`;
+    }
+    wrap.innerHTML = html;
     wrap.querySelectorAll("button").forEach((b) =>
       b.addEventListener("click", () => setPeriod(b.dataset.period)));
+    const ms = wrap.querySelector(".month-select");
+    if (ms) ms.addEventListener("change", () => { if (ms.value) setPeriod(ms.value); });
   });
 }
 
 function setPeriod(key) {
   activePeriodKey = key;
-  $$("#periodTabs button, #periodTabsTrends button").forEach((x) =>
-    x.classList.toggle("is-active", x.dataset.period === key));
+  renderPeriodTabs();
   renderRanking();
   renderTrends();
 }
@@ -108,21 +125,25 @@ function avatarHtml(p) {
     : inner;
 }
 
+// 同点時: rukupractice を最上位、それ以外はホスト(slug)のABC昇順
+function tieBreak(a, b) {
+  if (a.host === RUKU_HOST && b.host !== RUKU_HOST) return -1;
+  if (b.host === RUKU_HOST && a.host !== RUKU_HOST) return 1;
+  return String(a.host || "").localeCompare(String(b.host || ""));
+}
+
 function sortPublishers(list) {
   const dir = sortDir === "asc" ? 1 : -1;
   const arr = list.slice();
   arr.sort((a, b) => {
-    let va = a[sortKey], vb = b[sortKey];
     if (sortKey === "name") {
-      return String(va).localeCompare(String(vb), "ja") * dir;
+      const r = String(a.name).localeCompare(String(b.name), "ja") * dir;
+      return r || tieBreak(a, b);
     }
+    let va = a[sortKey], vb = b[sortKey];
     if (va == null) va = sortKey === "avg_rank" ? 999 : 0;
     if (vb == null) vb = sortKey === "avg_rank" ? 999 : 0;
-    if (va === vb) {
-      // tie-break: Top10 → 平均順位
-      if (b.top10 !== a.top10) return b.top10 - a.top10;
-      return a.avg_rank - b.avg_rank;
-    }
+    if (va === vb) return tieBreak(a, b);
     return (va - vb) * dir;
   });
   return arr;
@@ -156,16 +177,20 @@ function renderRanking() {
       ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>`
       : `<span>${esc(p.name)}</span>`;
     const host = p.host ? `<span class="host">${esc(p.host)}</span>` : "";
+    const c = (key) => "c-" + key + (key === sortKey ? " is-sorted" : "");
     return `<tr class="medal-${idx}">
       <td class="col-idx">${idx}</td>
       <td class="col-avatar">${avatarHtml(p)}</td>
-      <td class="col-name">${link}${host}</td>
-      <td>${p.days}</td>
-      <td class="${p.top1 ? "num hot" : ""}">${p.top1}</td>
-      <td>${p.top3}</td>
-      <td>${p.top10}</td>
-      <td>${p.avg_rank}位</td>
-      <td>${p.avg_attention}</td>
+      <td class="col-name ${"name" === sortKey ? "is-sorted" : ""}">${link}${host}</td>
+      <td class="${c("days")}">${p.days}</td>
+      <td class="${c("top1")} ${p.top1 ? "hot" : ""}">${p.top1}</td>
+      <td class="${c("top3")}">${p.top3}</td>
+      <td class="${c("top10")}">${p.top10}</td>
+      <td class="${c("avg_rank")}">${p.avg_rank}位</td>
+      <td class="${c("avg_attention")}">${p.avg_attention}</td>
+      <td class="${c("avg_likes")}">${p.avg_likes}</td>
+      <td class="${c("avg_restacks")}">${p.avg_restacks}</td>
+      <td class="${c("avg_comments")}">${p.avg_comments}</td>
     </tr>`;
   }).join("");
 }

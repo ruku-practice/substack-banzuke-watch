@@ -20,6 +20,7 @@ LOGOS_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "logos.json"))
 OUT_PATH = os.path.normpath(os.path.join(HERE, "..", "site", "data.json"))
 
 SITE_NAME = "Substack番付 つみあげウォッチ"
+RUKU_HOST = "rukupractice.substack.com"
 
 LOGOS = {}
 
@@ -121,12 +122,12 @@ def aggregate_publishers(rows):
             "avg_rank": round(s["rank_sum"] / n, 1) if n else 0,
             "best_rank": s["best_rank"] if s["best_rank"] != 99 else None,
             "avg_attention": round(s["att_sum"] / n, 1) if n else 0,
-            "likes": s["likes"],
-            "restacks": s["restacks"],
-            "comments": s["comments"],
+            "avg_likes": round(s["likes"] / n, 1) if n else 0,
+            "avg_restacks": round(s["restacks"] / n, 1) if n else 0,
+            "avg_comments": round(s["comments"] / n, 1) if n else 0,
         })
-    # 既定ソート: Top10降順 → 平均順位昇順 → 登場日数降順
-    out.sort(key=lambda p: (-p["top10"], p["avg_rank"], -p["days"]))
+    # 既定ソート: Top10降順 → 同点は rukupractice 最上位 → ホスト(slug)昇順
+    out.sort(key=lambda p: (-p["top10"], 0 if p["host"] == RUKU_HOST else 1, p["host"]))
     return out
 
 
@@ -242,12 +243,16 @@ def main():
                                   [r for r in rows if in_range(r, last30_start)]))
     periods.append(period_payload("last7", "直近7日",
                                   [r for r in rows if in_range(r, last7_start)]))
-    # 月別（新しい順）
+    # 月別（新しい順）。今月は「今月」タブと重複するので個別の月タブにはしない。
     months = sorted({r["date"][:7] for r in rows}, reverse=True)
     for ym in months:
+        if ym == cur_ym:
+            continue
         y, m = ym.split("-")
-        periods.append(period_payload(ym, f"{y}年{int(m)}月",
-                                      [r for r in rows if r["date"][:7] == ym]))
+        p = period_payload(ym, f"{y}年{int(m)}月", [r for r in rows if r["date"][:7] == ym])
+        if p:
+            p["is_month"] = True  # フロント側で「直近3ヶ月タブ / それ以前はプルダウン」に振り分ける
+        periods.append(p)
     periods = [p for p in periods if p]
 
     data = {
