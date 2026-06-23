@@ -101,12 +101,12 @@ def raw_strength(pub, top10_rank, n, period_days):
 
 
 def score_label(s):
-    if s >= 88: return "横綱級"
-    if s >= 82: return "大関級"
-    if s >= 75: return "関脇級"
-    if s >= 68: return "小結級"
-    if s >= 60: return "前頭級"
-    if s >= 52: return "十両級"
+    if s >= 80: return "横綱級"
+    if s >= 72: return "大関級"
+    if s >= 65: return "関脇級"
+    if s >= 58: return "小結級"
+    if s >= 52: return "前頭級"
+    if s >= 48: return "十両級"
     return "幕下級"
 
 
