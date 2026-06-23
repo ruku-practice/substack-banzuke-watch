@@ -8,13 +8,20 @@ let dailyDate = null;
 let compareHosts = [];
 let selectedCategory = null;
 let activePeriodKey = "cumulative";
+let activeView = "ranking";
 let sortKey = "top10";
 let sortDir = "desc"; // desc | asc
 let searchTerm = "";
+let riserSearchTerm = "";
+let newcomerSearchTerm = "";
 let renderedPublishers = [];
 const RUKU_HOST = "rukupractice.substack.com";
 const DETAIL_PARAM = "p";
 const PERIOD_PARAM = "period";
+const VIEW_PARAM = "view";
+const RANK_QUERY_PARAM = "rq";
+const RISER_QUERY_PARAM = "xq";
+const NEWCOMER_QUERY_PARAM = "nq";
 
 function loadDaily() {
   if (!dailyPromise) {
@@ -39,10 +46,21 @@ async function init() {
     $("#metaBar").textContent = "データの読み込みに失敗しました。";
     return;
   }
-  const requestedPeriod = new URLSearchParams(location.search).get(PERIOD_PARAM);
-  if (requestedPeriod && DATA.periods.some((p) => p.key === requestedPeriod)) {
-    activePeriodKey = requestedPeriod;
+  const params = new URLSearchParams(location.search);
+  const requestedPeriod = params.get(PERIOD_PARAM);
+  const requestedView = params.get(VIEW_PARAM);
+  const requestedSearch = params.get(RANK_QUERY_PARAM);
+  const requestedRiserSearch = params.get(RISER_QUERY_PARAM);
+  const requestedNewcomerSearch = params.get(NEWCOMER_QUERY_PARAM);
+  if (requestedPeriod && DATA.periods.some((p) => p.key === requestedPeriod)) activePeriodKey = requestedPeriod;
+  if (requestedView && ["ranking", "trends", "daily", "risers", "newcomers"].includes(requestedView)) activeView = requestedView;
+  else {
+    const hashView = location.hash.replace(/^#/, "");
+    if (["trends", "daily", "risers", "newcomers"].includes(hashView)) activeView = hashView;
   }
+  searchTerm = (requestedSearch || "").trim().toLowerCase();
+  riserSearchTerm = (requestedRiserSearch || "").trim().toLowerCase();
+  newcomerSearchTerm = (requestedNewcomerSearch || "").trim().toLowerCase();
   const cum = DATA.periods.find((p) => p.key === "cumulative") || DATA.periods[0];
   (cum.publishers || []).forEach((p) => { cumByHost[p.host] = p; });
   renderMeta();
@@ -50,16 +68,13 @@ async function init() {
   bindEvents();
   renderRanking();
   renderTrends();
-  const h = location.hash;
-  if (h === "#trends") activateView("trends");
-  else if (h === "#daily") activateView("daily");
-  else if (h === "#risers") activateView("risers");
-  else if (h === "#newcomers") activateView("newcomers");
-  const initialHost = new URLSearchParams(location.search).get(DETAIL_PARAM);
+  activateView(activeView);
+  const initialHost = params.get(DETAIL_PARAM);
   if (initialHost && cumByHost[initialHost]) openDetail(initialHost, { updateUrl: false });
 }
 
 function activateView(view) {
+  activeView = view;
   $$("#viewTabs .tab").forEach((x) => x.classList.toggle("is-active", x.dataset.view === view));
   $("#rankingView").hidden = view !== "ranking";
   $("#trendsView").hidden = view !== "trends";
@@ -69,6 +84,8 @@ function activateView(view) {
   if (view === "daily") initDailyView();
   if (view === "risers") renderRisers();
   if (view === "newcomers") renderNewcomers(currentPeriod());
+  syncViewInputs();
+  syncViewUrl();
 }
 
 function renderMeta() {
@@ -118,6 +135,30 @@ function setPeriod(key) {
   renderTrends();
   renderRisers();
   renderNewcomers(currentPeriod());
+  syncViewUrl();
+}
+
+function syncViewInputs() {
+  const rankBox = $("#searchBox");
+  if (rankBox && rankBox.value !== searchTerm) rankBox.value = searchTerm;
+  const riserBox = $("#riserSearchBox");
+  if (riserBox && riserBox.value !== riserSearchTerm) riserBox.value = riserSearchTerm;
+  const newcomerBox = $("#newcomerSearchBox");
+  if (newcomerBox && newcomerBox.value !== newcomerSearchTerm) newcomerBox.value = newcomerSearchTerm;
+}
+
+function syncViewUrl() {
+  const url = new URL(location.href);
+  const params = url.searchParams;
+  params.set(PERIOD_PARAM, activePeriodKey);
+  if (activeView !== "ranking") params.set(VIEW_PARAM, activeView);
+  else params.delete(VIEW_PARAM);
+  if (searchTerm) params.set(RANK_QUERY_PARAM, searchTerm); else params.delete(RANK_QUERY_PARAM);
+  if (riserSearchTerm) params.set(RISER_QUERY_PARAM, riserSearchTerm); else params.delete(RISER_QUERY_PARAM);
+  if (newcomerSearchTerm) params.set(NEWCOMER_QUERY_PARAM, newcomerSearchTerm); else params.delete(NEWCOMER_QUERY_PARAM);
+  if (activeView === "ranking") url.hash = "#ranking";
+  else url.hash = "#" + activeView;
+  history.replaceState(null, "", url.pathname + (params.toString() ? "?" + params.toString() : "") + url.hash);
 }
 
 function bindEvents() {
@@ -126,7 +167,6 @@ function bindEvents() {
     t.addEventListener("click", () => {
       const v = t.dataset.view;
       activateView(v);
-      history.replaceState(null, "", v === "ranking" ? "#" : "#" + v);
     }));
 
   // ランキング行クリック → 発行元詳細（リンククリックは除外）
@@ -180,7 +220,27 @@ function bindEvents() {
   let t = null;
   $("#searchBox").addEventListener("input", (e) => {
     clearTimeout(t);
-    t = setTimeout(() => { searchTerm = e.target.value.trim().toLowerCase(); renderRanking(); }, 120);
+    t = setTimeout(() => {
+      searchTerm = e.target.value.trim().toLowerCase();
+      renderRanking();
+      syncViewUrl();
+    }, 120);
+  });
+  $("#riserSearchBox").addEventListener("input", (e) => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      riserSearchTerm = e.target.value.trim().toLowerCase();
+      renderRisers();
+      syncViewUrl();
+    }, 120);
+  });
+  $("#newcomerSearchBox").addEventListener("input", (e) => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      newcomerSearchTerm = e.target.value.trim().toLowerCase();
+      renderNewcomers(currentPeriod());
+      syncViewUrl();
+    }, 120);
   });
   $("#csvExport").addEventListener("click", exportCsv);
   $("#shareX").addEventListener("click", () => shareDetail("x"));
@@ -531,10 +591,15 @@ function renderCategoryDetail(cat) {
 }
 
 function renderNewcomers(period) {
-  const list = (period.publishers || [])
+  let list = (period.publishers || [])
     .filter((p) => p.first_date)
     .sort((a, b) => String(b.first_date).localeCompare(String(a.first_date)) || (a.best_rank - b.best_rank) || tieBreak(a, b))
     .slice(0, 12);
+  if (newcomerSearchTerm) {
+    list = list.filter((p) =>
+      (p.name || "").toLowerCase().includes(newcomerSearchTerm) ||
+      (p.host || "").toLowerCase().includes(newcomerSearchTerm));
+  }
   const note = $("#newcomerNote");
   if (note) note.textContent = `${period.label}で初めて番付入りした発行元の一覧`;
   $("#newcomerTable").innerHTML =
@@ -547,25 +612,30 @@ function renderNewcomers(period) {
 }
 
 function renderRisers() {
-  const last7 = DATA.periods.find((p) => p.key === "last7");
+  const period = currentPeriod();
   const cumulative = DATA.periods.find((p) => p.key === "cumulative") || DATA.periods[0];
-  if (!last7 || !cumulative) return;
+  if (!period || !cumulative) return;
   const rankByTop10 = (list) => list.slice().sort((a, b) =>
     (b.top10 - a.top10) || (b.top3 - a.top3) || (a.avg_rank - b.avg_rank) || tieBreak(a, b));
   const cumRank = {};
   rankByTop10(cumulative.publishers).forEach((p, i) => { cumRank[p.host] = i + 1; });
-  const risers = rankByTop10(last7.publishers)
+  let risers = rankByTop10(period.publishers || [])
     .map((p, i) => {
       const cRank = cumRank[p.host] || cumulative.publishers.length + 1;
       return { ...p, recent_rank: i + 1, cumulative_rank: cRank, rise: cRank - (i + 1) };
     })
     .filter((p) => p.top10 > 0 && p.rise > 0)
-    .sort((a, b) => (b.rise - a.rise) || (b.top10 - a.top10) || tieBreak(a, b))
-    .slice(0, 12);
+    .sort((a, b) => (b.rise - a.rise) || (b.top10 - a.top10) || tieBreak(a, b));
+  if (riserSearchTerm) {
+    risers = risers.filter((p) =>
+      (p.name || "").toLowerCase().includes(riserSearchTerm) ||
+      (p.host || "").toLowerCase().includes(riserSearchTerm));
+  }
+  risers = risers.slice(0, 12);
   const note = $("#riserNote");
-  if (note) note.textContent = "直近7日のTop10入りと累積順位を比べた急上昇リスト";
+  if (note) note.textContent = `${period.label}のTop10入りと累積順位を比べた急上昇リスト`;
   $("#riserTable").innerHTML =
-    `<thead><tr><th style="text-align:left">発行元</th><th>7日順位</th><th>累積順位</th><th>上昇</th><th>Top10</th></tr></thead>` +
+    `<thead><tr><th style="text-align:left">発行元</th><th>${esc(period.label)}順位</th><th>累積順位</th><th>上昇</th><th>Top10</th></tr></thead>` +
     "<tbody>" + risers.map((p) =>
       `<tr class="row-click" data-host="${esc(p.host)}"><td style="text-align:left"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a><span class="host">${esc(p.host)}</span></td><td>${p.recent_rank}</td><td>${p.cumulative_rank}</td><td>+${p.rise}</td><td>${p.top10}</td></tr>`
     ).join("") + "</tbody>";
