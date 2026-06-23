@@ -10,6 +10,7 @@ let sortKey = "top10";
 let sortDir = "desc"; // desc | asc
 let searchTerm = "";
 const RUKU_HOST = "rukupractice.substack.com";
+const DETAIL_PARAM = "p";
 
 function loadDaily() {
   if (!dailyPromise) {
@@ -44,6 +45,8 @@ async function init() {
   const h = location.hash;
   if (h === "#trends") activateView("trends");
   else if (h === "#daily") activateView("daily");
+  const initialHost = new URLSearchParams(location.search).get(DETAIL_PARAM);
+  if (initialHost && cumByHost[initialHost]) openDetail(initialHost, { updateUrl: false });
 }
 
 function activateView(view) {
@@ -201,6 +204,7 @@ function renderRanking() {
       (p.host || "").toLowerCase().includes(searchTerm));
   }
   list = sortPublishers(list);
+  renderScorePanel(period, list);
 
   // header sort indicator
   $$("#rankTable th[data-sort]").forEach((th) => {
@@ -233,6 +237,59 @@ function renderRanking() {
       <td class="${c("avg_comments")}">${p.avg_comments}</td>
     </tr>`;
   }).join("");
+}
+
+function scoreValue(p, period) {
+  const publishers = period.publishers || [];
+  const byTop10 = publishers.slice().sort((a, b) => (b.top10 - a.top10) || tieBreak(a, b));
+  const top10Rank = Math.max(1, byTop10.findIndex((x) => x.host === p.host) + 1);
+  const pct = publishers.length > 1 ? (publishers.length - top10Rank) / (publishers.length - 1) : 1;
+  const continuity = period.days ? Math.min(1, p.days / period.days) : 0;
+  const rankPower = p.avg_rank ? Math.max(0, (31 - p.avg_rank) / 30) : 0;
+  return {
+    score: Math.round(45 + pct * 25 + continuity * 18 + rankPower * 12),
+    top10Rank,
+    top10Rate: p.days ? Math.round((p.top10 / p.days) * 100) : 0,
+    continuity: Math.round(continuity * 100),
+  };
+}
+
+function scoreLabel(score) {
+  if (score >= 80) return "横綱級";
+  if (score >= 70) return "大関級";
+  if (score >= 62) return "関脇級";
+  if (score >= 55) return "小結級";
+  return "幕内級";
+}
+
+function scoreHtml(p, period, compact = false) {
+  const s = scoreValue(p, period);
+  const label = scoreLabel(s.score);
+  return `<div class="score-main${compact ? " compact" : ""}">
+    <div class="score-ring" aria-label="番付偏差値 ${s.score}"><span>${s.score}</span><small>偏差値</small></div>
+    <div class="score-copy">
+      <b>${esc(label)}</b>
+      <span>${esc(period.label)}でTop10回数 ${s.top10Rank}位。登場日のTop10率 ${s.top10Rate}%、番付への継続登場率 ${s.continuity}%。</span>
+    </div>
+  </div>`;
+}
+
+function renderScorePanel(period, visibleList) {
+  const panel = $("#scorePanel");
+  if (!panel) return;
+  if (!searchTerm || visibleList.length !== 1) {
+    panel.hidden = true;
+    panel.innerHTML = "";
+    return;
+  }
+  const p = visibleList[0];
+  panel.hidden = false;
+  panel.innerHTML = `<div class="score-panel-head">
+    <span class="score-eyebrow">自分の番付偏差値</span>
+    <button type="button" data-detail-host="${esc(p.host)}">詳細を見る</button>
+  </div>${scoreHtml(p, period)}`;
+  const btn = panel.querySelector("[data-detail-host]");
+  if (btn) btn.addEventListener("click", () => openDetail(btn.dataset.detailHost));
 }
 
 function renderTrends() {
@@ -271,7 +328,15 @@ function renderTrends() {
 
 /* ── 発行元 詳細モーダル ─────────────────────────────── */
 function showModal() { $("#detailModal").hidden = false; document.body.classList.add("modal-open"); }
-function closeDetail() { $("#detailModal").hidden = true; document.body.classList.remove("modal-open"); }
+function closeDetail() {
+  $("#detailModal").hidden = true;
+  document.body.classList.remove("modal-open");
+  if (new URLSearchParams(location.search).has(DETAIL_PARAM)) {
+    const url = new URL(location.href);
+    url.searchParams.delete(DETAIL_PARAM);
+    history.replaceState(null, "", url.pathname + url.search + location.hash);
+  }
+}
 
 function statChips(p) {
   const items = [
@@ -311,7 +376,8 @@ function buildRankChart(apps) {
   return `<svg viewBox="0 0 ${W} ${H}" class="rank-chart">${guides}${line}${dots}${xl}</svg>`;
 }
 
-async function openDetail(host) {
+async function openDetail(host, opts = {}) {
+  const updateUrl = opts.updateUrl !== false;
   const cum = cumByHost[host];
   const name = cum ? cum.name : host;
   const url = cum ? cum.url : "https://" + host + "/";
@@ -322,9 +388,17 @@ async function openDetail(host) {
   const av = $("#dmAvatar");
   if (logo) { av.src = logo; av.style.display = ""; } else { av.style.display = "none"; }
   $("#dmStats").innerHTML = cum ? statChips(cum) : "";
+  const period = currentPeriod();
+  const periodPub = (period.publishers || []).find((p) => p.host === host) || cum;
+  $("#dmScore").innerHTML = periodPub ? scoreHtml(periodPub, period, true) : "";
   $("#dmChartSub").textContent = "";
   $("#dmChart").innerHTML = '<div class="dm-loading">読み込み中…</div>';
   $("#dmHistory").innerHTML = "";
+  if (updateUrl) {
+    const url = new URL(location.href);
+    url.searchParams.set(DETAIL_PARAM, host);
+    history.replaceState(null, "", url.pathname + url.search + location.hash);
+  }
   showModal();
   await loadDaily();
   const apps = [];
