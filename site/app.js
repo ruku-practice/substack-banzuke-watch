@@ -415,13 +415,21 @@ function tieBreak(a, b) {
   return String(a.host || "").localeCompare(String(b.host || ""));
 }
 
+// 列の値が同点のときの第2キー: つみあげスコア高い順 → ルク最上位 → ホストABC。
+function tieBreakByScore(a, b, period) {
+  const sa = scoreValue(a, period).score;
+  const sb = scoreValue(b, period).score;
+  if (sa !== sb) return sb - sa;
+  return tieBreak(a, b);
+}
+
 function sortPublishers(list, period) {
   const dir = sortDir === "asc" ? 1 : -1;
   const arr = list.slice();
   arr.sort((a, b) => {
     if (sortKey === "name") {
       const r = String(a.name).localeCompare(String(b.name), "ja") * dir;
-      return r || tieBreak(a, b);
+      return r || tieBreakByScore(a, b, period);
     }
     if (sortKey === "score") {
       const sa = scoreValue(a, period).score;
@@ -432,7 +440,7 @@ function sortPublishers(list, period) {
     let va = a[sortKey], vb = b[sortKey];
     if (va == null) va = sortKey === "avg_rank" ? 999 : 0;
     if (vb == null) vb = sortKey === "avg_rank" ? 999 : 0;
-    if (va === vb) return tieBreak(a, b);
+    if (va === vb) return tieBreakByScore(a, b, period);
     return (va - vb) * dir;
   });
   return arr;
