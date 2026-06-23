@@ -93,8 +93,8 @@ def circle_avatar(img, size):
     return out
 
 
-def raw_strength(pub, top10_rank, n, period_days):
-    pct = (n - top10_rank) / (n - 1) if n > 1 else 1
+def raw_strength(pub, pct, period_days):
+    # pct = Top10回数のパーセンタイル（同数は同値）
     continuity = min(1, pub["days"] / period_days) if period_days else 0
     rank_power = max(0, (31 - pub["avg_rank"]) / 30) if pub["avg_rank"] else 0
     return 45 + pct * 25 + continuity * 18 + rank_power * 12
@@ -216,13 +216,24 @@ def main():
     n = len(pubs)
     period_days = cum["days"]
 
-    # cumulative.publishers は既に Top10降順（同点 ruku→host）で並ぶ＝top10_rank=index+1
+    # Top10回数のパーセンタイル（同数は同値）を算出
+    counts = {}
+    for p in pubs:
+        if p.get("host"):
+            counts[p["top10"]] = counts.get(p["top10"], 0) + 1
+    less_than = {}
+    cum = 0
+    for v in sorted(counts):
+        less_than[v] = cum
+        cum += counts[v]
+
     # raw=精密値（順位付け用）, s=小数第1位（表示用）
     scored = []
-    for i, p in enumerate(pubs):
+    for p in pubs:
         if not p.get("host"):
             continue
-        raw = raw_strength(p, i + 1, n, period_days)
+        pct = less_than[p["top10"]] / (n - 1) if n > 1 else 1
+        raw = raw_strength(p, pct, period_days)
         scored.append((raw, round(raw, 1), p))
     # スコア順位（精密値の降順）
     order = sorted(range(len(scored)), key=lambda k: -scored[k][0])

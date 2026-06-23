@@ -78,6 +78,7 @@ async function init() {
   renderRanking();
   renderTrends();
   activateView(activeView);
+  setupSticky();
   const initialHost = params.get(DETAIL_PARAM);
   if (initialHost && cumByHost[initialHost]) openDetail(initialHost, { updateUrl: false });
   if (restoreCustom) ensureCustomPeriod().then(afterPeriodChange);
@@ -103,6 +104,7 @@ function activateView(view) {
   if (view === "newcomers") renderNewcomers(currentPeriod());
   syncViewInputs();
   syncViewUrl();
+  if (typeof refreshStickyHeader === "function") { const f = document.getElementById("stickyHead"); if (f) f._sig = null; refreshStickyHeader(); }
 }
 
 function renderMeta() {
@@ -516,27 +518,34 @@ function renderRanking() {
       <td class="col-score ${"score" === sortKey ? "is-sorted" : ""}"><span class="score-value-badge">${score}</span></td>
     </tr>`;
   }).join("");
+  if (typeof refreshStickyHeader === "function") refreshStickyHeader();
 }
 
-// 期間ごとに Top10相対順位マップを一度だけ計算してキャッシュ。
+// 期間ごとに Top10回数の分布（パーセンタイル・同数順位）を一度だけ計算してキャッシュ。
 function periodComputed(period) {
   if (period._sc) return period._sc;
   const pubs = period.publishers || [];
   const N = pubs.length;
-  const byTop10 = pubs.slice().sort((a, b) => (b.top10 - a.top10) || tieBreak(a, b));
-  const top10RankMap = {};
-  byTop10.forEach((p, i) => { top10RankMap[p.host] = i + 1; });
-  const sc = { top10RankMap, N };
+  const counts = new Map();
+  pubs.forEach((p) => counts.set(p.top10, (counts.get(p.top10) || 0) + 1));
+  const values = [...counts.keys()].sort((a, b) => a - b);
+  const lessThan = new Map(); // Top10値 → それ未満の発行元数
+  let cum = 0;
+  for (const v of values) { lessThan.set(v, cum); cum += counts.get(v); }
+  const rankByCount = new Map(); // Top10値 → 表示順位（同数は同順位・1始まり）
+  for (const v of values) { rankByCount.set(v, N - lessThan.get(v) - counts.get(v) + 1); }
+  const sc = { N, lessThan, rankByCount };
   try { Object.defineProperty(period, "_sc", { value: sc, enumerable: false, configurable: true }); }
   catch (e) { period._sc = sc; }
   return sc;
 }
 
-// つみあげスコア: Top10相対順位・登場継続率・平均順位の重み付け合算（その期間の強さ）。
+// つみあげスコア: Top10回数のパーセンタイル・登場継続率・平均順位の重み付け合算（その期間の強さ）。
+// Top10回数が同じ発行元は pct も同じ → その中の優劣は継続率・平均順位で決まる。
 function scoreValue(p, period) {
   const sc = periodComputed(period);
-  const top10Rank = sc.top10RankMap[p.host] || sc.N;
-  const pct = sc.N > 1 ? (sc.N - top10Rank) / (sc.N - 1) : 1;
+  const top10Rank = sc.rankByCount.get(p.top10) || sc.N;
+  const pct = sc.N > 1 ? (sc.lessThan.get(p.top10) || 0) / (sc.N - 1) : 1;
   const continuity = period.days ? Math.min(1, p.days / period.days) : 0;
   const rankPower = p.avg_rank ? Math.max(0, (31 - p.avg_rank) / 30) : 0;
   const raw = 45 + pct * 25 + continuity * 18 + rankPower * 12;
@@ -886,6 +895,7 @@ function showModal() { $("#detailModal").hidden = false; document.body.classList
 function closeDetail() {
   $("#detailModal").hidden = true;
   document.body.classList.remove("modal-open");
+  if (typeof refreshStickyHeader === "function") refreshStickyHeader();
   if (new URLSearchParams(location.search).has(DETAIL_PARAM)) {
     const url = new URL(location.href);
     url.searchParams.delete(DETAIL_PARAM);
@@ -1267,4 +1277,82 @@ function renderDaily(date) {
       <td>${e.a}</td><td>${e.l}</td><td>${e.rs}</td><td>${e.c}</td>
     </tr>`;
   }).join("");
+}
+
+/* ── スクロール追従ヘッダー ─────────────────────────────── */
+const MAIN_TABLES = { ranking: "rankTable", daily: "dailyTable", risers: "riserTable", newcomers: "newcomerTable" };
+
+function activeMainScroll() {
+  const id = MAIN_TABLES[activeView];
+  if (!id) return null;
+  const table = document.getElementById(id);
+  if (!table || !table.tHead || !table.tBodies[0] || !table.tBodies[0].rows.length) return null;
+  return { table, scroll: table.closest(".table-scroll"), thead: table.tHead };
+}
+
+let _stickyRAF = null;
+function refreshStickyHeader() {
+  if (_stickyRAF) return;
+  _stickyRAF = requestAnimationFrame(() => { _stickyRAF = null; doStickyHeader(); });
+}
+
+function doStickyHeader() {
+  try { doStickyHeaderInner(); }
+  catch (e) { const f = document.getElementById("stickyHead"); if (f) f.hidden = true; }
+}
+function doStickyHeaderInner() {
+  const float = document.getElementById("stickyHead");
+  if (!float) return;
+  const modal = document.getElementById("detailModal");
+  if (modal && !modal.hidden) { float.hidden = true; return; }
+  const ctx = activeMainScroll();
+  if (!ctx) { float.hidden = true; return; }
+  const { table, scroll, thead } = ctx;
+  const tableRect = table.getBoundingClientRect();
+  const headH = thead.offsetHeight;
+  if (!(tableRect.top < 0 && tableRect.bottom > headH + 6)) { float.hidden = true; return; }
+  const inner = float.firstElementChild;
+  const sig = thead.innerHTML + "|" + Math.round(scroll.clientWidth) + "|" + Math.round(tableRect.width);
+  if (float._sig !== sig) {
+    float._sig = sig;
+    const ftable = document.createElement("table");
+    ftable.className = table.className;
+    ftable.style.tableLayout = "fixed";
+    ftable.style.width = tableRect.width + "px";
+    const cthead = thead.cloneNode(true);
+    const realThs = thead.querySelectorAll("th");
+    const cThs = cthead.querySelectorAll("th");
+    realThs.forEach((th, i) => {
+      const w = th.getBoundingClientRect().width;
+      if (cThs[i]) { cThs[i].style.width = w + "px"; cThs[i].style.minWidth = w + "px"; cThs[i].style.maxWidth = w + "px"; }
+    });
+    ftable.appendChild(cthead);
+    inner.innerHTML = "";
+    inner.appendChild(ftable);
+    ftable.addEventListener("click", (e) => {
+      const th = e.target.closest("th[data-sort]");
+      if (!th) return;
+      const idx = Array.prototype.indexOf.call(th.parentNode.children, th);
+      const realTh = thead.querySelectorAll("th")[idx];
+      if (realTh) realTh.click();
+    });
+  }
+  float.style.left = Math.max(0, tableRect.left) + "px";
+  float.style.width = scroll.clientWidth + "px";
+  inner.scrollLeft = scroll.scrollLeft;
+  float.hidden = false;
+}
+
+function setupSticky() {
+  window.addEventListener("scroll", refreshStickyHeader, { passive: true });
+  window.addEventListener("resize", () => {
+    const f = document.getElementById("stickyHead");
+    if (f) f._sig = null;
+    refreshStickyHeader();
+  });
+  document.querySelectorAll(".table-scroll").forEach((s) =>
+    s.addEventListener("scroll", () => {
+      const f = document.getElementById("stickyHead");
+      if (f && !f.hidden) f.firstElementChild.scrollLeft = s.scrollLeft;
+    }, { passive: true }));
 }

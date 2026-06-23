@@ -545,6 +545,17 @@ body.modal-open { overflow: hidden; }
 }
 .modal-backdrop[hidden] { display: none; }
 
+/* スクロール追従ヘッダー（フローティング） */
+.sticky-head {
+  position: fixed; top: 0; z-index: 50; overflow: hidden;
+  background: #f4efe6; border-bottom: 2px solid var(--ink);
+  box-shadow: 0 6px 16px rgba(33,29,24,.10); border-radius: 0 0 4px 4px;
+}
+.sticky-head[hidden] { display: none; }
+.sticky-inner { overflow: hidden; }
+.sticky-head table { border-collapse: collapse; }
+.sticky-head thead th { position: static; box-shadow: none; }
+
 /* 共有トースト */
 .card-toast {
   position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 16px);
