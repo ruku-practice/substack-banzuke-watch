@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Substack番付 つみあげウォッチ</title>
+<meta name="description" content="Substack番付の日々のTOP30を“つみあげ”集計。発行元（書き手）別ランキングで、継続的に伸びている人が一目で分かる非公式スタッツサイト。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <h1 class="site-title">Substack番付 <span class="accent">つみあげウォッチ</span></h1>
+    <p class="tagline">番付の“その日”を、“つみあげ”で見る。— Substack番付の非公式スタッツ</p>
+    <ul class="pitch">
+      <li>📈 <b>書く人へ</b>：自分や憧れの書き手が、通算でどれだけ上位常連かが分かる</li>
+      <li>🔎 <b>読む人へ</b>：継続的に良い記事を出している書き手を見つけてフォローできる</li>
+    </ul>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="meta-bar" id="metaBar"></section>
+
+  <nav class="tabs" id="viewTabs">
+    <button class="tab is-active" data-view="ranking">発行元ランキング</button>
+    <button class="tab" data-view="trends">番付トレンド</button>
+  </nav>
+
+  <!-- ランキングビュー -->
+  <section id="rankingView">
+    <div class="controls">
+      <div class="period-tabs" id="periodTabs"></div>
+      <div class="search-wrap">
+        <input type="search" id="searchBox" placeholder="発行元を検索…" autocomplete="off">
+      </div>
+    </div>
+    <p class="period-note" id="periodNote"></p>
+    <div class="table-scroll">
+      <table class="rank-table" id="rankTable">
+        <thead>
+          <tr>
+            <th class="col-idx">#</th>
+            <th class="col-name" data-sort="name">発行元</th>
+            <th class="num" data-sort="days">登場<br>日数</th>
+            <th class="num" data-sort="top1">1位</th>
+            <th class="num" data-sort="top3">Top3</th>
+            <th class="num" data-sort="top10">Top10</th>
+            <th class="num" data-sort="avg_rank">平均<br>順位</th>
+            <th class="num" data-sort="avg_attention">平均<br>注目度</th>
+          </tr>
+        </thead>
+        <tbody id="rankBody"></tbody>
+      </table>
+    </div>
+    <p class="empty-note" id="emptyNote" hidden>該当する発行元がありません。</p>
+  </section>
+
+  <!-- トレンドビュー -->
+  <section id="trendsView" hidden>
+    <div class="trend-grid">
+      <div class="card">
+        <h3>順位別 平均注目度（Top10）</h3>
+        <div id="perRankChart" class="bar-chart"></div>
+      </div>
+      <div class="card">
+        <h3>順位帯別 平均指標</h3>
+        <div class="table-scroll">
+          <table class="rank-table compact" id="bandTable"></table>
+        </div>
+      </div>
+      <div class="card">
+        <h3>カテゴリ別ランキング（Top10入り回数順）</h3>
+        <div class="table-scroll">
+          <table class="rank-table compact" id="catTable"></table>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p>データ出典：<a id="srcLink" href="https://substackbanzuke.com/" target="_blank" rel="noopener">Substack番付（substackbanzuke.com）</a></p>
+    <p class="disclaimer">本サイトは Substack番付 のデータを個人が集計した<b>非公式</b>のスタッツサイトです。各発行元名はそれぞれのSubstackへのリンクです。</p>
+    <p class="gen" id="genAt"></p>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
