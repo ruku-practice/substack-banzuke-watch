@@ -882,12 +882,11 @@ function statChips(p, extra = []) {
   ).join("");
 }
 
-function detailShareUrl(host, periodKey = activePeriodKey) {
-  const url = new URL(location.href);
-  url.searchParams.set(PERIOD_PARAM, periodKey);
-  url.searchParams.set(DETAIL_PARAM, host);
-  if (!url.hash) url.hash = location.hash || "#ranking";
-  return url.toString();
+// 共有用URL = 発行元ごとのOGPページ（XにこのURLを貼るとカードがプレビュー表示される）。
+// 人間がアクセスするとアプリ本体（?p=host）へ自動リダイレクトする。
+function detailShareUrl(host) {
+  const base = location.origin + location.pathname.replace(/[^/]*$/, "").replace(/\/$/, "");
+  return `${base}/p/${host}/`;
 }
 
 function detailShareText(host, kind = "x") {
@@ -929,15 +928,10 @@ async function shareDetail(kind) {
   const text = detailShareText(host, kind);
   const url = detailShareUrl(host, activePeriodKey);
   if (kind === "x") {
-    // X投稿欄を開く（本文＋URLは自動入力）。画像はX側で自動添付できないため、
-    // 同時にカード画像をクリップボードへコピーし、投稿欄に貼り付けてもらう。
+    // 発行元OGPページのURLを貼るので、Xではカード画像がプレビュー表示される。
     const intent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
     window.open(intent, "_blank", "noopener");
-    showToast("画像を生成中…");
-    try {
-      const r = await copyCardImage(host);
-      showToast(r === "download" ? "画像を保存しました。Xの投稿欄に添付してください" : "画像をコピー！Xの投稿欄に貼り付け（⌘V）してください");
-    } catch (e) { showToast("画像の用意に失敗しました"); }
+    showToast("Xを開きました。URLのプレビューにカード画像が表示されます");
     return;
   }
   await copyTextToClipboard(kind === "copy" ? url : text);

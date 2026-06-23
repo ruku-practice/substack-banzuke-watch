@@ -1,3 +1,7 @@
 .DS_Store
 __pycache__/
 *.pyc
+
+# 発行元OGP（CIで生成・Pages配信のみ）
+site/cards/
+site/p/
