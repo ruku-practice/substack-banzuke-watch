@@ -633,9 +633,24 @@ function renderRisers() {
   }
   risers = risers.slice(0, 12);
   const note = $("#riserNote");
-  if (note) note.textContent = `${period.label}のTop10入りと累積順位を比べた急上昇リスト`;
-  $("#riserTable").innerHTML =
-    `<thead><tr><th style="text-align:left">発行元</th><th>${esc(period.label)}順位</th><th>累積順位</th><th>上昇</th><th>Top10</th></tr></thead>` +
+  const isCumulative = activePeriodKey === "cumulative";
+  if (note) {
+    note.textContent = isCumulative
+      ? "「直近7日」「今月」など期間を選ぶと、累積順位からの急上昇が出ます（累積どうしは比較できません）。"
+      : `${period.label}のTop10入りと累積順位を比べた急上昇リスト`;
+  }
+  const headerRow =
+    `<thead><tr><th style="text-align:left">発行元</th><th>${esc(period.label)}順位</th><th>累積順位</th><th>上昇</th><th>Top10</th></tr></thead>`;
+  if (!risers.length) {
+    $("#riserTable").innerHTML = headerRow +
+      `<tbody><tr><td colspan="5" style="text-align:center;color:var(--ink-3);padding:22px 8px">` +
+      (isCumulative
+        ? "上の期間タブから「直近7日」などを選んでください。"
+        : "この期間に該当する急上昇の発行元はありません。") +
+      `</td></tr></tbody>`;
+    return;
+  }
+  $("#riserTable").innerHTML = headerRow +
     "<tbody>" + risers.map((p) =>
       `<tr class="row-click" data-host="${esc(p.host)}"><td style="text-align:left"><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a><span class="host">${esc(p.host)}</span></td><td>${p.recent_rank}</td><td>${p.cumulative_rank}</td><td>+${p.rise}</td><td>${p.top10}</td></tr>`
     ).join("") + "</tbody>";
