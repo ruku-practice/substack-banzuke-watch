@@ -200,6 +200,7 @@ main { padding-bottom: 8px; }
   min-width: 26px; height: 26px; padding: 0 6px; border-radius: 8px;
   font-family: var(--font-num); font-weight: 600; font-size: .98rem; color: var(--ink-3);
 }
+.score-value-badge,
 .score-rank-badge {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 34px; height: 28px; padding: 0 8px; border-radius: 8px;

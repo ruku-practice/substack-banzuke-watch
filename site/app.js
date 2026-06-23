@@ -246,7 +246,6 @@ function scoreRankMap(list, period) {
 
 function renderRanking() {
   const period = currentPeriod();
-  const scoreRanks = scoreRankMap(period.publishers || [], period);
   $("#periodNote").textContent =
     `${period.label}：${period.start} 〜 ${period.end}（${period.days}日間・${period.entries}件）／ 見出しクリックで並べ替え・詳細ボタンで順位推移`;
 
@@ -271,7 +270,7 @@ function renderRanking() {
   $("#emptyNote").hidden = list.length > 0;
   body.innerHTML = list.map((p, i) => {
     const idx = i + 1;
-    const rank = scoreRanks[p.host] || "–";
+    const score = scoreValue(p, period).score;
     const link = p.url
       ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>`
       : `<span>${esc(p.name)}</span>`;
@@ -287,7 +286,7 @@ function renderRanking() {
           <span>詳細</span>
         </button>
       </td>
-      <td><span class="score-rank-badge">#${rank}</span></td>
+      <td><span class="score-value-badge">${score}</span></td>
       <td class="${c("days")}">${p.days}</td>
       <td class="${c("top1")} ${p.top1 ? "hot" : ""}">${p.top1}</td>
       <td class="${c("top3")}">${p.top3}</td>
