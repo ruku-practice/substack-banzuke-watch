@@ -2,7 +2,10 @@ name: daily-update
 
 on:
   schedule:
-    - cron: "15 23 * * *"  # 約 08:15 JST（番付公開直後を狙う）
+    - cron: "0 23 * * *"   # 約 08:00 JST
+    - cron: "30 23 * * *"  # 約 08:30 JST
+    - cron: "0 0 * * *"    # 約 09:00 JST
+    - cron: "30 0 * * *"   # 約 09:30 JST
     - cron: "0 3 * * *"    # 約 12:00 JST（取りこぼし用の保険・未取得日のみ取得）
   workflow_dispatch: {}     # 手動実行も可
   push:
