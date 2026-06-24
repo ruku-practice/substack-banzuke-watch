@@ -2,10 +2,7 @@ name: daily-update
 
 on:
   schedule:
-    - cron: "0 23 * * *"   # 約 08:00 JST
-    - cron: "30 23 * * *"  # 約 08:30 JST
-    - cron: "0 0 * * *"    # 約 09:00 JST
-    - cron: "30 0 * * *"   # 約 09:30 JST
+    - cron: "10 23 * * *"  # 約 08:10 JST（リトライ開始）
     - cron: "0 3 * * *"    # 約 12:00 JST（取りこぼし用の保険・未取得日のみ取得）
   workflow_dispatch: {}     # 手動実行も可
   push:

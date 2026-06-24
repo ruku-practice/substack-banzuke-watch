@@ -236,14 +236,43 @@ def main():
         return
 
     print(f"Missing dates: {len(targets)} ({targets[0]} .. {targets[-1]})")
+    
+    # JSTでの今日・昨日を定義
+    today_jst = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=9))).date()
+    yesterday_jst = today_jst - timedelta(days=1)
+    
+    max_retries = 6
+    retry_interval = 600  # 10分
+    
     total = 0
     for t in targets:
-        print(f"Fetching {t}...")
-        new = fetch_date(t)
+        # リトライ対象は昨日以前の未取得日とする（今日以降のデータは未公開が正常なためリトライしない）
+        is_retry_target = (t <= yesterday_jst)
+        
+        attempt = 0
+        new = []
+        while attempt < max_retries:
+            attempt_str = f" (attempt {attempt + 1}/{max_retries})" if is_retry_target else ""
+            print(f"Fetching {t}{attempt_str}...")
+            new = fetch_date(t)
+            if new:
+                break
+            
+            if not is_retry_target:
+                break
+                
+            attempt += 1
+            if attempt < max_retries:
+                print(f"  No entries. Retrying in {retry_interval} seconds...")
+                time.sleep(retry_interval)
+                
         if new:
             append_rows(new)
             total += len(new)
             print(f"  +{len(new)} rows")
+        else:
+            print(f"  Could not retrieve data for {t} after attempts.")
+            
         time.sleep(1.0)
     print(f"Done. Added {total} rows.")
 
