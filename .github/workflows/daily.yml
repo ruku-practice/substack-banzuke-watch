@@ -1,30 +1,22 @@
-name: daily-update
+name: daily-update (manual fallback)
 
+# 通常の日次更新は Google Cloud（Cloud Scheduler 08:10 JST → Cloud Run Job "banzuke-daily"）で実行する。
+# このワークフローは手動の保険用。schedule / push トリガーは持たない
+#（Cloud Run の main push でこのワークフローが誤起動しないようにするため）。
+# GitHub Pages は gh-pages ブランチ配信に変更済みのため、deploy-pages は使わず gh-pages へ直接 push する。
 on:
-  schedule:
-    # 08:10 JST の主実行は「ローカルMacのcron→gh workflow run(workflow_dispatch)」で行う
-    # （GitHubのschedule cronは混雑で1〜3.5時間遅延するため）。
-    # 下の schedule は Mac が留守で発火できなかった日の保険（未取得日のみ取得）。
-    - cron: "0 3 * * *"    # 約 12:00 JST（保険・未取得日のみ取得）
-  workflow_dispatch: {}     # ローカルcronからのトリガー & 手動実行
-  push:
-    branches: [main]        # コード更新時も再デプロイ（botコミットは再トリガーされない）
+  workflow_dispatch: {}
 
 permissions:
-  contents: write   # data.json / CSV のコミット用
-  pages: write      # GitHub Pages デプロイ用
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
+  group: banzuke-fallback
   cancel-in-progress: false
 
 jobs:
   update:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -32,40 +24,39 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: 未取得日の番付を収集（バックフィル）
-        run: python3 scripts/scrape.py
+      - name: 収集・集計
+        run: |
+          python3 scripts/scrape.py
+          python3 scripts/fetch_logos.py
+          python3 scripts/build_site_data.py
 
-      - name: 新規発行元のロゴURLを収集（増分）
-        run: python3 scripts/fetch_logos.py
-
-      - name: 集計して data.json を生成
-        run: python3 scripts/build_site_data.py
-
-      - name: 変更をコミット（データ蓄積）
+      - name: データを main へコミット
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/banzuke_full.csv data/logos.json site/data.json
           if git diff --staged --quiet; then
-            echo "変更なし（本日分はまだ未公開の可能性）"
+            echo "変更なし"
           else
-            git commit -m "data: 自動更新 $(TZ=Asia/Tokyo date +%Y-%m-%d)"
+            git commit -m "data: 手動更新 $(TZ=Asia/Tokyo date +%Y-%m-%d) [fallback]"
             git push
           fi
 
-      - name: OGP生成用の依存（Pillow・日本語フォント）
+      - name: OGPカード・ページ生成
         run: |
           python3 -m pip install --quiet Pillow
           sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
+          python3 scripts/make_publisher_pages.py
 
-      - name: 発行元ごとのOGPカード・ページを生成（Pages配信のみ）
-        run: python3 scripts/make_publisher_pages.py
-
-      - uses: actions/configure-pages@v5
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: site を gh-pages へ公開
+        run: |
+          cp -r site /tmp/pages
+          cd /tmp/pages
+          touch .nojekyll
+          git init -q
+          git checkout -q -b gh-pages
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "deploy (manual fallback) $(TZ=Asia/Tokyo date +%Y-%m-%dT%H:%M)"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" gh-pages
