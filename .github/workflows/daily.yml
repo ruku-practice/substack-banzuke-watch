@@ -2,9 +2,11 @@ name: daily-update
 
 on:
   schedule:
-    - cron: "10 23 * * *"  # 約 08:10 JST（リトライ開始）
-    - cron: "0 3 * * *"    # 約 12:00 JST（取りこぼし用の保険・未取得日のみ取得）
-  workflow_dispatch: {}     # 手動実行も可
+    # 08:10 JST の主実行は「ローカルMacのcron→gh workflow run(workflow_dispatch)」で行う
+    # （GitHubのschedule cronは混雑で1〜3.5時間遅延するため）。
+    # 下の schedule は Mac が留守で発火できなかった日の保険（未取得日のみ取得）。
+    - cron: "0 3 * * *"    # 約 12:00 JST（保険・未取得日のみ取得）
+  workflow_dispatch: {}     # ローカルcronからのトリガー & 手動実行
   push:
     branches: [main]        # コード更新時も再デプロイ（botコミットは再トリガーされない）
 
