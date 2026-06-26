@@ -1243,24 +1243,20 @@ function buildRankChart(apps) {
   return `<svg viewBox="0 0 ${W} ${H}" class="rank-chart">${guides}${line}${dots}${xl}</svg>`;
 }
 
+// 各ホスト自身の日次データがこの日数たまるまで推移グラフは出さない（蓄積中は非表示）。
+// 新しい出版元も、その出版元のデータが MIN_SUBS_POINTS 日たまってから自動で表示される。
+const MIN_SUBS_POINTS = 7;
 function renderSubsChart(host) {
   loadSubsHistory().then(() => {
     const wrap = $("#dmSubsWrap");
     if (!wrap) return;
     const hist = (SUBS_HISTORY || {})[host] || {};
     const points = Object.entries(hist).sort((a, b) => (a[0] < b[0] ? -1 : 1));
+    if (points.length < MIN_SUBS_POINTS) { wrap.hidden = true; return; }
     wrap.hidden = false;
-    if (points.length >= 2) {
-      const diff = points[points.length - 1][1] - points[0][1];
-      $("#dmSubsSub").textContent = `（${points.length}点・${diff >= 0 ? "+" : ""}${diff.toLocaleString("ja-JP")}）`;
-      $("#dmSubsChart").innerHTML = buildSubsChart(points);
-    } else {
-      const cur = subsLabel(host);
-      $("#dmSubsSub").textContent = "";
-      $("#dmSubsChart").innerHTML = cur
-        ? `<div class="dm-loading">現在 ${esc(cur)}（日次で記録開始・推移は明日以降）</div>`
-        : `<div class="dm-loading">購読者数は非公開です</div>`;
-    }
+    const diff = points[points.length - 1][1] - points[0][1];
+    $("#dmSubsSub").textContent = `（${points.length}点・${diff >= 0 ? "+" : ""}${diff.toLocaleString("ja-JP")}）`;
+    $("#dmSubsChart").innerHTML = buildSubsChart(points);
   });
 }
 
