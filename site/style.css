@@ -606,3 +606,12 @@ body.modal-open { overflow: hidden; }
   color: var(--accent-2); border-bottom: 1px solid transparent;
 }
 .score-guide-link:hover { border-bottom-color: currentColor; }
+
+/* 購読者数（参考値・概数） */
+.col-subs { text-align: right; white-space: nowrap; }
+.subs-badge {
+  display: inline-block; font-weight: 700; font-size: .82rem;
+  color: var(--ink-2); background: #f3efe7;
+  border-radius: 999px; padding: 1px 8px;
+}
+.subs-none { color: var(--ink-3); }

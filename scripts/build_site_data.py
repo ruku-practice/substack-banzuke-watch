@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 HERE = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "banzuke_full.csv"))
 LOGOS_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "logos.json"))
+SUBS_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "subscribers.json"))
 OUT_PATH = os.path.normpath(os.path.join(HERE, "..", "site", "data.json"))
 DAILY_PATH = os.path.normpath(os.path.join(HERE, "..", "site", "daily.json"))
 
@@ -227,8 +228,21 @@ def category_stats(rows):
     return out
 
 
+def load_subscribers():
+    """data/subscribers.json → {host: "11K+"} の概数ラベル（参考値・公開分のみ）。"""
+    if not os.path.exists(SUBS_PATH):
+        return {}
+    try:
+        with open(SUBS_PATH, encoding="utf-8") as f:
+            raw = json.load(f)
+    except Exception:
+        return {}
+    return {h: v.get("subs") for h, v in raw.items() if v.get("subs")}
+
+
 def main():
     load_logos()
+    subscribers = load_subscribers()
     rows = load_rows()
     if not rows:
         raise SystemExit("No rows in CSV")
@@ -274,6 +288,7 @@ def main():
         "publisher_count": len({r["key"] for r in rows}),
         "logo_count": sum(1 for v in LOGOS.values() if v),
         "logos": {h: u for h, u in LOGOS.items() if u},
+        "subscribers": subscribers,  # {host: "11K+"} 購読者数の概数（参考値・公開分のみ）
         "periods": periods,
     }
 

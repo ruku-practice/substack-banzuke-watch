@@ -20,10 +20,11 @@ git config user.email "cloud-run-bot@users.noreply.github.com"
 # --- データ収集・集計 ---
 python3 scripts/scrape.py
 python3 scripts/fetch_logos.py
+python3 scripts/fetch_subscribers.py || true   # 購読者概数（参考値・失敗しても続行）
 python3 scripts/build_site_data.py
 
 # --- 蓄積データを main へコミット ---
-git add data/banzuke_full.csv data/logos.json site/data.json
+git add data/banzuke_full.csv data/logos.json data/subscribers.json site/data.json
 if git diff --staged --quiet; then
   echo "データ変更なし（本日分は未公開の可能性）"
 else

@@ -7,7 +7,7 @@ let cumByHost = {};
 let dailyDate = null;
 let compareHosts = [];
 let selectedCategory = null;
-let activePeriodKey = "cumulative";
+let activePeriodKey = "last30";
 let customPeriod = null;
 let customRange = null;
 let activeView = "ranking";
@@ -121,10 +121,13 @@ function renderMeta() {
 }
 
 function renderPeriodTabs() {
-  const fixed = DATA.periods.filter((p) => !p.is_month);
+  // タブ順: 直近30日 → 累積 → 今月 → 直近7日
+  const ORDER = ["last30", "cumulative", "this_month", "last7"];
+  const fixed = DATA.periods.filter((p) => !p.is_month)
+    .sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key));
   const months = DATA.periods.filter((p) => p.is_month);   // 新しい順（build順）
-  const recentMonths = months.slice(0, 3);                 // 直近3ヶ月はタブ
-  const olderMonths = months.slice(3);                     // それ以前はプルダウン
+  const recentMonths = months.slice(0, 1);                 // 先月のみタブ
+  const olderMonths = months.slice(1);                     // 先月以前はプルダウン
 
   ["#periodTabs", "#periodTabsTrends", "#periodTabsRisers", "#periodTabsNewcomers"].forEach((sel) => {
     const wrap = $(sel);
@@ -410,6 +413,17 @@ function avatarHtml(p) {
     : inner;
 }
 
+// 購読者数の概数ラベル（Substackプロフィール由来・参考値・公開分のみ）。無ければ "–"
+function subsLabel(host) {
+  return (DATA.subscribers && DATA.subscribers[host]) || "";
+}
+function subsHtml(host) {
+  const s = subsLabel(host);
+  return s
+    ? `<span class="subs-badge" title="Substackの購読者数（概数・参考値）">${esc(s)}</span>`
+    : `<span class="subs-none" title="購読者数は非公開">–</span>`;
+}
+
 // 同点時: rukupractice を最上位、それ以外はホスト(slug)のABC昇順
 function tieBreak(a, b) {
   if (a.host === RUKU_HOST && b.host !== RUKU_HOST) return -1;
@@ -516,6 +530,7 @@ function renderRanking() {
       <td class="${c("avg_restacks")}">${p.avg_restacks}</td>
       <td class="${c("avg_comments")}">${p.avg_comments}</td>
       <td class="col-score ${"score" === sortKey ? "is-sorted" : ""}"><span class="score-value-badge">${score}</span></td>
+      <td class="col-subs">${subsHtml(p.host)}</td>
     </tr>`;
   }).join("");
   if (typeof refreshStickyHeader === "function") refreshStickyHeader();
@@ -1208,7 +1223,10 @@ async function openDetail(host, opts = {}) {
   const period = currentPeriod();
   const periodPub = (period.publishers || []).find((p) => p.host === host) || cum;
   const ranks = scoreRankMap(period.publishers || [], period);
-  $("#dmStats").innerHTML = cum ? statChips(cum, periodPub ? [["スコア順位", `${ranks[host] || "–"}位`]] : []) : "";
+  const dmExtra = periodPub ? [["スコア順位", `${ranks[host] || "–"}位`]] : [];
+  const dmSubs = subsLabel(host);
+  if (dmSubs) dmExtra.push(["購読者数(参考)", dmSubs]);
+  $("#dmStats").innerHTML = cum ? statChips(cum, dmExtra) : "";
   $("#dmScore").innerHTML = periodPub ? scoreHtml(periodPub, period, true, ranks[host]) : "";
   $("#dmChartSub").textContent = "";
   $("#dmChart").innerHTML = '<div class="dm-loading">読み込み中…</div>';
