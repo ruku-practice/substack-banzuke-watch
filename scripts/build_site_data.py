@@ -18,6 +18,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "banzuke_full.csv"))
 LOGOS_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "logos.json"))
 SUBS_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "subscribers.json"))
+SUBS_HIST_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "subscribers_history.json"))
+SITE_SUBS_HIST = os.path.normpath(os.path.join(HERE, "..", "site", "subscribers_history.json"))
 OUT_PATH = os.path.normpath(os.path.join(HERE, "..", "site", "data.json"))
 DAILY_PATH = os.path.normpath(os.path.join(HERE, "..", "site", "daily.json"))
 
@@ -312,6 +314,16 @@ def main():
     with open(DAILY_PATH, "w", encoding="utf-8") as f:
         json.dump(daily, f, ensure_ascii=False, separators=(",", ":"))
     dkb = os.path.getsize(DAILY_PATH) / 1024
+
+    # 購読者数の日別履歴を詳細グラフ用にサイトへ出力（{host: {date: num}}・遅延読込）
+    if os.path.exists(SUBS_HIST_PATH):
+        try:
+            with open(SUBS_HIST_PATH, encoding="utf-8") as f:
+                shist = json.load(f)
+            with open(SITE_SUBS_HIST, "w", encoding="utf-8") as f:
+                json.dump(shist, f, ensure_ascii=False, separators=(",", ":"))
+        except Exception as e:
+            print(f"  ! subscribers_history 出力スキップ: {e}")
 
     print(f"Wrote {OUT_PATH} ({kb:.0f} KB) + daily.json ({dkb:.0f} KB)")
     print(f"  range {start}..{end} ({len(all_dates)} days, {len(rows)} entries, "

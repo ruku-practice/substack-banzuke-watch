@@ -33,6 +33,17 @@ function loadDaily() {
   return dailyPromise;
 }
 
+// 購読者数の日別履歴（詳細グラフ用・遅延読込）
+let SUBS_HISTORY = null, subsHistPromise = null;
+function loadSubsHistory() {
+  if (!subsHistPromise) {
+    subsHistPromise = fetch("subscribers_history.json", { cache: "no-cache" })
+      .then((r) => (r.ok ? r.json() : {})).catch(() => ({}))
+      .then((d) => (SUBS_HISTORY = d || {}));
+  }
+  return subsHistPromise;
+}
+
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
@@ -1186,6 +1197,30 @@ async function copyShareImage() {
   }
 }
 
+// 購読者数の推移グラフ。points=[[date,num],...] 昇順。値はバケット(11K等)のため階段状になりがち。
+function buildSubsChart(points) {
+  const W = 640, H = 200, padL = 50, padR = 14, padT = 16, padB = 24;
+  const innerW = W - padL - padR, innerH = H - padT - padB, N = points.length;
+  const nums = points.map((p) => p[1]);
+  let lo = Math.min(...nums), hi = Math.max(...nums);
+  if (lo === hi) { lo = lo * 0.97; hi = hi * 1.03 + 1; }
+  const x = (i) => padL + (N <= 1 ? innerW / 2 : (i / (N - 1)) * innerW);
+  const y = (v) => padT + (1 - (v - lo) / (hi - lo)) * innerH;
+  const fmt = (v) => v >= 10000 ? (v / 1000).toFixed(0) + "K" : v >= 1000 ? (v / 1000).toFixed(1) + "K" : String(Math.round(v));
+  const guides = [hi, lo].map((v) =>
+    `<line x1="${padL}" y1="${y(v).toFixed(1)}" x2="${W - padR}" y2="${y(v).toFixed(1)}" class="g-grid"/>` +
+    `<text x="${padL - 5}" y="${(y(v) + 3).toFixed(1)}" class="g-lbl" text-anchor="end">${fmt(v)}</text>`
+  ).join("");
+  const pts = points.map((p, i) => `${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`).join(" ");
+  const line = N > 1 ? `<polyline points="${pts}" class="g-line"/>` : "";
+  const dots = points.map((p, i) =>
+    `<circle cx="${x(i).toFixed(1)}" cy="${y(p[1]).toFixed(1)}" r="3" class="g-dot"><title>${p[0]} ${fmt(p[1])}</title></circle>`
+  ).join("");
+  const xl = `<text x="${padL}" y="${H - 6}" class="g-lbl">${points[0][0].slice(5)}</text>` +
+    `<text x="${W - padR}" y="${H - 6}" class="g-lbl" text-anchor="end">${points[N - 1][0].slice(5)}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" class="rank-chart">${guides}${line}${dots}${xl}</svg>`;
+}
+
 function buildRankChart(apps) {
   const dates = DAILY.dates, N = dates.length;
   const idxOf = {}; dates.forEach((d, i) => (idxOf[d] = i));
@@ -1206,6 +1241,27 @@ function buildRankChart(apps) {
   const xl = `<text x="${padL}" y="${H - 6}" class="g-lbl">${dates[0].slice(5)}</text>` +
     `<text x="${W - padR}" y="${H - 6}" class="g-lbl" text-anchor="end">${dates[N - 1].slice(5)}</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" class="rank-chart">${guides}${line}${dots}${xl}</svg>`;
+}
+
+function renderSubsChart(host) {
+  loadSubsHistory().then(() => {
+    const wrap = $("#dmSubsWrap");
+    if (!wrap) return;
+    const hist = (SUBS_HISTORY || {})[host] || {};
+    const points = Object.entries(hist).sort((a, b) => (a[0] < b[0] ? -1 : 1));
+    wrap.hidden = false;
+    if (points.length >= 2) {
+      const diff = points[points.length - 1][1] - points[0][1];
+      $("#dmSubsSub").textContent = `（${points.length}点・${diff >= 0 ? "+" : ""}${diff.toLocaleString("ja-JP")}）`;
+      $("#dmSubsChart").innerHTML = buildSubsChart(points);
+    } else {
+      const cur = subsLabel(host);
+      $("#dmSubsSub").textContent = "";
+      $("#dmSubsChart").innerHTML = cur
+        ? `<div class="dm-loading">現在 ${esc(cur)}（日次で記録開始・推移は明日以降）</div>`
+        : `<div class="dm-loading">購読者数は非公開です</div>`;
+    }
+  });
 }
 
 async function openDetail(host, opts = {}) {
@@ -1231,6 +1287,8 @@ async function openDetail(host, opts = {}) {
   $("#dmChartSub").textContent = "";
   $("#dmChart").innerHTML = '<div class="dm-loading">読み込み中…</div>';
   $("#dmHistory").innerHTML = "";
+  $("#dmSubsWrap").hidden = true;
+  renderSubsChart(host);
   if (updateUrl) {
     const url = new URL(location.href);
     url.searchParams.set(DETAIL_PARAM, host);
@@ -1293,6 +1351,7 @@ function renderDaily(date) {
       <td class="col-name"><a href="${esc(root)}" target="_blank" rel="noopener">${esc(e.n)}</a>` +
       `<a class="daily-title" href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.t || "(無題)")}</a></td>
       <td>${e.a}</td><td>${e.l}</td><td>${e.rs}</td><td>${e.c}</td>
+      <td class="col-subs">${subsHtml(e.h)}</td>
     </tr>`;
   }).join("");
 }

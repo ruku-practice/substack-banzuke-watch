@@ -1,74 +1,71 @@
 #!/usr/bin/env python3
-"""各発行元（Substackパブリケーション）の購読者数の概数ラベルを集めて
-data/subscribers.json に保存する（参考値・増減追跡はしない静的指標）。
+"""各発行元の購読者数の概数を集めて保存する。
+- data/subscribers.json         … 現在値 {host: {subs, num, handle, checked}}
+- data/subscribers_history.json … 日別の数値時系列 {host: {YYYY-MM-DD: num}}（詳細グラフ用）
 
-取得方法:
-  1) https://<host>/about の埋め込みJSONから著者 handle と publication の概数を拾う
-  2) https://substack.com/@<handle> から "11K+ subscribers" 形式の概数ラベルを拾う
-     （ユーザー要望の表示形式。取れなければ about の "Over N" を "NK+" に変換）
-
-公開していない発行元は subs=null（→フロントは非表示）。バケット表示のため
-頻繁には変わらない。CHECK_TTL_DAYS 以内は再取得しない＋1回 CAP 件までに制限。
+取得: <host>/about から著者 handle を解決（取得後キャッシュ）→ substack.com/@handle の
+"11K+ subscribers" 概数を抽出。バケット表記は数値化（11K+→11000, 226→226）。
+公開していない発行元は subs=null。1日1回だけ点を記録（同日再実行はスキップ）。
 """
 
 import json
 import os
 import re
-import sys
 import csv
 import time
 import urllib.request
-from datetime import date, datetime, timedelta
+from datetime import date
 from urllib.parse import urlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "banzuke_full.csv"))
 OUT_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "subscribers.json"))
+HIST_PATH = os.path.normpath(os.path.join(HERE, "..", "data", "subscribers_history.json"))
 
 UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"}
-CAP = int(os.getenv("SUBS_CAP", "60"))         # 1回の実行で取得する最大数
-CHECK_TTL_DAYS = int(os.getenv("SUBS_TTL", "14"))
-DELAY = float(os.getenv("SUBS_DELAY", "1.0"))
+CAP = int(os.getenv("SUBS_CAP", "250"))
+DELAY = float(os.getenv("SUBS_DELAY", "0.8"))
 
 
 def _get(url, timeout=20):
     try:
-        req = urllib.request.Request(url, headers=UA)
-        return urllib.request.urlopen(req, timeout=timeout).read().decode("utf-8", "replace")
+        return urllib.request.urlopen(urllib.request.Request(url, headers=UA),
+                                      timeout=timeout).read().decode("utf-8", "replace")
     except Exception:
         return None
 
 
-def _compact(n: int) -> str:
-    """10000 -> '10K', 2000 -> '2K', 100000 -> '100K', 500 -> '500'."""
-    if n >= 1_000_000:
-        return f"{n // 1_000_000}M"
-    if n >= 1000:
-        return f"{n // 1000}K"
-    return str(n)
+def label_to_num(label: str):
+    """'11K+'->11000, '1.1K+'->1100, '226'->226, '13M+'->13000000."""
+    if not label:
+        return None
+    s = label.strip().replace("+", "").replace(",", "")
+    mul = 1
+    if s and s[-1] in "Kk":
+        mul, s = 1000, s[:-1]
+    elif s and s[-1] in "Mm":
+        mul, s = 1_000_000, s[:-1]
+    try:
+        return int(float(s) * mul)
+    except Exception:
+        return None
 
 
-def subs_for_host(host: str):
-    """(subs_label or None) を返す。"""
+def resolve_handle(host):
     about = _get(f"https://{host}/about")
-    handle = None
-    about_label = None
-    if about:
-        m = re.search(r'handle\\?"\s*:\s*\\?"([a-zA-Z0-9_.\-]+)', about)
-        if m:
-            handle = m.group(1)
-        mo = re.search(r'Over\s+([0-9,]+)\s+subscribers', about)
-        if mo:
-            about_label = _compact(int(mo.group(1).replace(",", ""))) + "+"
-    # プロフィールの "11K+ subscribers" を優先
-    if handle:
-        prof = _get(f"https://substack.com/@{handle}")
-        if prof:
-            mp = re.search(r'([0-9][0-9.]*[KkMm]?\+?)\s*subscribers', prof)
-            if mp:
-                return mp.group(1).upper().replace(" ", "")
-    return about_label
+    if not about:
+        return None
+    m = re.search(r'handle\\?"\s*:\s*\\?"([a-zA-Z0-9_.\-]+)', about)
+    return m.group(1) if m else None
+
+
+def fetch_label(handle):
+    prof = _get(f"https://substack.com/@{handle}")
+    if not prof:
+        return None
+    m = re.search(r'([0-9][0-9.]*[KkMm]?\+?)\s*subscribers', prof)
+    return m.group(1).upper().replace(" ", "") if m else None
 
 
 def hosts_from_csv():
@@ -81,43 +78,46 @@ def hosts_from_csv():
     return seen
 
 
-def main():
-    cache = {}
-    if os.path.exists(OUT_PATH):
+def load(path, default):
+    if os.path.exists(path):
         try:
-            with open(OUT_PATH, encoding="utf-8") as f:
-                cache = json.load(f)
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
         except Exception:
-            cache = {}
-    today = date.today()
+            pass
+    return default
 
-    def stale(h):
-        c = cache.get(h)
-        if not c or "checked" not in c:
-            return True
-        try:
-            return (today - datetime.fromisoformat(c["checked"]).date()) >= timedelta(days=CHECK_TTL_DAYS)
-        except Exception:
-            return True
+
+def main():
+    cur = load(OUT_PATH, {})
+    hist = load(HIST_PATH, {})
+    today = date.today().isoformat()
 
     hosts = hosts_from_csv()
-    todo = [h for h in hosts if stale(h)]
-    print(f"hosts {len(hosts)} / stale {len(todo)} / cap {CAP}")
+    # 本日まだ記録していないホストのみ対象（1日1点）
+    todo = [h for h in hosts if today not in hist.get(h, {})]
+    print(f"hosts {len(hosts)} / 本日未取得 {len(todo)} / cap {CAP}")
     done = 0
     for h in todo:
         if done >= CAP:
             break
-        subs = subs_for_host(h)
-        cache[h] = {"subs": subs, "checked": today.isoformat()}
-        print(f"  {h} -> {subs}")
+        handle = (cur.get(h) or {}).get("handle") or resolve_handle(h)
+        label = fetch_label(handle) if handle else None
+        num = label_to_num(label)
+        cur[h] = {"subs": label, "num": num, "handle": handle, "checked": today}
+        if num is not None:
+            hist.setdefault(h, {})[today] = num
+        print(f"  {h} (@{handle}) -> {label}")
         done += 1
         time.sleep(DELAY)
 
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
     with open(OUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(cache, f, ensure_ascii=False, indent=1)
-    have = sum(1 for v in cache.values() if v.get("subs"))
-    print(f"saved {OUT_PATH}: {len(cache)}件 (購読者ラベルあり {have}) / 今回取得 {done}")
+        json.dump(cur, f, ensure_ascii=False, indent=1)
+    with open(HIST_PATH, "w", encoding="utf-8") as f:
+        json.dump(hist, f, ensure_ascii=False, separators=(",", ":"))
+    have = sum(1 for v in cur.values() if v.get("subs"))
+    print(f"saved: 現在 {len(cur)}件(ラベルあり {have}) / 履歴 {len(hist)}ホスト / 今回取得 {done}")
 
 
 if __name__ == "__main__":
