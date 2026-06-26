@@ -434,6 +434,17 @@ function subsHtml(host) {
     ? `<span class="subs-badge" title="Substackの購読者数（概数・参考値）">${esc(s)}</span>`
     : `<span class="subs-none" title="購読者数は非公開">–</span>`;
 }
+// ソート用に購読者ラベルを数値化（"11K+"->11000, "1.1K+"->1100, "226"->226）。非公開は null。
+function subsNum(host) {
+  const s = subsLabel(host);
+  if (!s) return null;
+  const m = s.replace(/[+,]/g, "").match(/^([\d.]+)\s*([KMkm]?)/);
+  if (!m) return null;
+  let n = parseFloat(m[1]);
+  if (/[Kk]/.test(m[2])) n *= 1000;
+  else if (/[Mm]/.test(m[2])) n *= 1e6;
+  return n;
+}
 
 // 同点時: rukupractice を最上位、それ以外はホスト(slug)のABC昇順
 function tieBreak(a, b) {
@@ -464,6 +475,12 @@ function sortPublishers(list, period) {
       const rb = scoreValue(b, period).raw;
       if (ra === rb) return tieBreak(a, b);
       return (ra - rb) * dir;
+    }
+    if (sortKey === "subscribers") {
+      const na = subsNum(a.host), nb = subsNum(b.host);
+      const va2 = na == null ? -1 : na, vb2 = nb == null ? -1 : nb;  // 非公開は最下位
+      if (va2 === vb2) return tieBreakByScore(a, b, period);
+      return (va2 - vb2) * dir;
     }
     let va = a[sortKey], vb = b[sortKey];
     if (va == null) va = sortKey === "avg_rank" ? 999 : 0;
@@ -541,7 +558,7 @@ function renderRanking() {
       <td class="${c("avg_restacks")}">${p.avg_restacks}</td>
       <td class="${c("avg_comments")}">${p.avg_comments}</td>
       <td class="col-score ${"score" === sortKey ? "is-sorted" : ""}"><span class="score-value-badge">${score}</span></td>
-      <td class="col-subs">${subsHtml(p.host)}</td>
+      <td class="col-subs ${"subscribers" === sortKey ? "is-sorted" : ""}">${subsHtml(p.host)}</td>
     </tr>`;
   }).join("");
   if (typeof refreshStickyHeader === "function") refreshStickyHeader();
