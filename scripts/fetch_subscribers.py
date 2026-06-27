@@ -109,16 +109,30 @@ def main():
     todo = [h for h in hosts if today not in hist.get(h, {})]
     print(f"hosts {len(hosts)} / 本日未取得 {len(todo)} / cap {CAP}")
     done = 0
+    kept = 0
     for h in todo:
         if done >= CAP:
             break
-        handle = (cur.get(h) or {}).get("handle") or resolve_handle(h)
+        old = cur.get(h, {})
+        handle = old.get("handle") or resolve_handle(h)
         label = fetch_label(handle) if handle else None
         num = label_to_num(label)
-        cur[h] = {"subs": label, "num": num, "handle": handle, "checked": today}
-        if num is not None:
-            hist.setdefault(h, {})[today] = num
-        print(f"  {h} (@{handle}) -> {label}")
+
+        if label is not None:
+            cur[h] = {"subs": label, "num": num, "handle": handle, "checked": today}
+            if num is not None:
+                hist.setdefault(h, {})[today] = num
+            print(f"  {h} (@{handle}) -> {label}")
+        else:
+            # Preserve previous good subscriber count on transient fetch failure.
+            # Only update the "last checked" timestamp.
+            if old.get("subs"):
+                cur[h] = {**old, "checked": today, "handle": handle or old.get("handle")}
+                kept += 1
+            else:
+                cur[h] = {"subs": None, "num": None, "handle": handle, "checked": today}
+            print(f"  {h} (@{handle}) -> {label} (kept previous={bool(old.get('subs'))})")
+
         done += 1
         time.sleep(DELAY)
 
@@ -128,7 +142,7 @@ def main():
     with open(HIST_PATH, "w", encoding="utf-8") as f:
         json.dump(hist, f, ensure_ascii=False, separators=(",", ":"))
     have = sum(1 for v in cur.values() if v.get("subs"))
-    print(f"saved: 現在 {len(cur)}件(ラベルあり {have}) / 履歴 {len(hist)}ホスト / 今回取得 {done}")
+    print(f"saved: 現在 {len(cur)}件(ラベルあり {have}) / 履歴 {len(hist)}ホスト / 今回処理 {done} (kept previous on fail: {kept})")
 
 
 if __name__ == "__main__":
