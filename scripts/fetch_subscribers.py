@@ -4,8 +4,9 @@
 - data/subscribers_history.json … 日別の数値時系列 {host: {YYYY-MM-DD: num}}（詳細グラフ用）
 
 取得: <host>/about から著者 handle を解決（取得後キャッシュ）→ substack.com/@handle の
-"11K+ subscribers" 概数を抽出。バケット表記は数値化（11K+→11000, 226→226）。
-公開していない発行元は subs=null。1日1回だけ点を記録（同日再実行はスキップ）。
+"11K+ subscribers" または "969 登録者" 等の概数を抽出。
+バケット表記は数値化（11K+→11000, 226→226）。公開していない発行元は subs=null。
+1日1回だけ点を記録（同日再実行はスキップ）。
 """
 
 import json
@@ -56,15 +57,25 @@ def resolve_handle(host):
     about = _get(f"https://{host}/about")
     if not about:
         return None
-    m = re.search(r'handle\\?"\s*:\s*\\?"([a-zA-Z0-9_.\-]+)', about)
-    return m.group(1) if m else None
+    # Multiple patterns for robustness (page may have different JSON escaping)
+    patterns = [
+        r'handle\\?"\s*:\s*\\?"([a-zA-Z0-9_.\-]+)',
+        r'"handle":\s*"([a-zA-Z0-9_.\-]+)"',
+        r'handle:\s*"([a-zA-Z0-9_.\-]+)"',
+    ]
+    for pat in patterns:
+        m = re.search(pat, about)
+        if m:
+            return m.group(1)
+    return None
 
 
 def fetch_label(handle):
     prof = _get(f"https://substack.com/@{handle}")
     if not prof:
         return None
-    m = re.search(r'([0-9][0-9.]*[KkMm]?\+?)\s*subscribers', prof)
+    # Support both English and Japanese (Substack sometimes shows "登録者")
+    m = re.search(r'([0-9][0-9.,]*[KkMm]?\+?)\s*(subscribers?|登録者)', prof, re.IGNORECASE)
     return m.group(1).upper().replace(" ", "") if m else None
 
 
