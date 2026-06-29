@@ -1,11 +1,13 @@
-name: daily-update (manual fallback)
+name: Daily Banzuke update
 
-# 通常の日次更新は Google Cloud（Cloud Scheduler 08:10 JST → Cloud Run Job "banzuke-daily"）で実行する。
-# このワークフローは手動の保険用。schedule / push トリガーは持たない
-#（Cloud Run の main push でこのワークフローが誤起動しないようにするため）。
-# GitHub Pages は gh-pages ブランチ配信に変更済みのため、deploy-pages は使わず gh-pages へ直接 push する。
 on:
-  workflow_dispatch: {}
+  schedule:
+    # フォールバック専用: 08:10 JST。
+    # 通常の 08:10 実行は Google Cloud（Cloud Scheduler 08:10 JST → Cloud Run Job "banzuke-daily"）で行う。
+    # GitHubのスケジュールcronはベストエフォートで混雑時は数十分〜数時間遅延するため、
+    # この schedule は「Cloud Run が失敗/未実行だった日」の保険として残す。
+    - cron: "10 23 * * *"
+  workflow_dispatch: {}   # 手動実行
 
 permissions:
   contents: write
@@ -40,6 +42,8 @@ jobs:
             echo "変更なし"
           else
             git commit -m "data: 手動更新 $(TZ=Asia/Tokyo date +%Y-%m-%d) [fallback]"
+            # Cloud Run が先に push 済みでも衝突しないよう rebase してから push
+            git pull --rebase --autostash origin main || true
             git push
           fi
 

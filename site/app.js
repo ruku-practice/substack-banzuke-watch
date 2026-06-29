@@ -120,12 +120,14 @@ function activateView(view) {
 
 function renderMeta() {
   const d = DATA.date_range;
+  const g = new Date(DATA.generated_at);
+  const genStr = g.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
   $("#metaBar").innerHTML =
     `<span>集計期間 <b>${esc(d.start)}</b> 〜 <b>${esc(d.end)}</b>（<b>${d.days}</b>日間）</span>` +
-    `<span>発行元 <b>${DATA.publisher_count}</b> 件 / 記事 <b>${d.entries}</b> 件</span>`;
+    `<span>発行元 <b>${DATA.publisher_count}</b> 件 / 記事 <b>${d.entries}</b> 件</span>` +
+    `<span>最終更新 <b>${esc(genStr)}</b></span>`;
   $("#srcLink").href = DATA.source.url;
-  const g = new Date(DATA.generated_at);
-  $("#genAt").textContent = "最終更新: " + g.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }) + "（毎朝自動更新）";
+  $("#genAt").textContent = "最終更新: " + genStr + "（毎朝自動更新 / 番付は前日分まで反映）";
   const rukuLogo = DATA.logos && DATA.logos[RUKU_HOST];
   if (rukuLogo) $("#creatorIcon").src = rukuLogo;
   else $("#creatorIcon").remove();
