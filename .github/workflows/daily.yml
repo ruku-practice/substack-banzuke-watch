@@ -22,11 +22,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: 本日の更新状況をチェック
+        id: check_today
+        run: |
+          TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          echo "本日の日付: $TODAY"
+          git fetch origin main
+          LOGS=$(git log origin/main -n 5 --oneline)
+          echo "直近のコミットログ:"
+          echo "$LOGS"
+          if echo "$LOGS" | grep -E "data: (自動|手動)更新 $TODAY \[(cloud-run|fallback)\]" > /dev/null; then
+            echo "already_run=true" >> $GITHUB_OUTPUT
+            echo "本日分の更新は既に完了しています。"
+          else
+            echo "already_run=false" >> $GITHUB_OUTPUT
+            echo "本日分の更新は未実行です。"
+          fi
+
       - uses: actions/setup-python@v5
+        if: steps.check_today.outputs.already_run != 'true'
         with:
           python-version: "3.12"
 
       - name: 収集・集計
+        if: steps.check_today.outputs.already_run != 'true'
         run: |
           python3 scripts/scrape.py
           python3 scripts/fetch_logos.py
@@ -34,6 +53,7 @@ jobs:
           python3 scripts/build_site_data.py
 
       - name: データを main へコミット
+        if: steps.check_today.outputs.already_run != 'true'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -48,12 +68,14 @@ jobs:
           fi
 
       - name: OGPカード・ページ生成
+        if: steps.check_today.outputs.already_run != 'true'
         run: |
           python3 -m pip install --quiet Pillow
           sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
           python3 scripts/make_publisher_pages.py
 
       - name: site を gh-pages へ公開
+        if: steps.check_today.outputs.already_run != 'true'
         run: |
           cp -r site /tmp/pages
           cd /tmp/pages
