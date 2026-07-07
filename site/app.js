@@ -1232,9 +1232,11 @@ function buildSubsChart(points) {
   ).join("");
   const pts = points.map((p, i) => `${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`).join(" ");
   const line = N > 1 ? `<polyline points="${pts}" class="g-line"/>` : "";
-  const dots = points.map((p, i) =>
-    `<circle cx="${x(i).toFixed(1)}" cy="${y(p[1]).toFixed(1)}" r="3" class="g-dot"><title>${p[0]} ${fmt(p[1])}</title></circle>`
-  ).join("");
+  const dots = points.map((p, i) => {
+    const cx = x(i).toFixed(1), cy = y(p[1]).toFixed(1);
+    return `<circle cx="${cx}" cy="${cy}" r="8" class="g-hit" data-date="${esc(p[0])}" data-label="${esc(fmt(p[1]))}"></circle>` +
+      `<circle cx="${cx}" cy="${cy}" r="3" class="g-dot"></circle>`;
+  }).join("");
   const xl = `<text x="${padL}" y="${H - 6}" class="g-lbl">${points[0][0].slice(5)}</text>` +
     `<text x="${W - padR}" y="${H - 6}" class="g-lbl" text-anchor="end">${points[N - 1][0].slice(5)}</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" class="rank-chart">${guides}${line}${dots}${xl}</svg>`;
@@ -1254,12 +1256,62 @@ function buildRankChart(apps) {
   const pts = apps.map((a) => `${x(idxOf[a.date]).toFixed(1)},${y(a.r).toFixed(1)}`).join(" ");
   const line = apps.length > 1 ? `<polyline points="${pts}" class="g-line"/>` : "";
   const bestR = Math.min(...apps.map((a) => a.r));
-  const dots = apps.map((a) =>
-    `<circle cx="${x(idxOf[a.date]).toFixed(1)}" cy="${y(a.r).toFixed(1)}" r="${a.r === bestR ? 4.5 : 3}" class="g-dot${a.r === bestR ? " g-best" : ""}"><title>${a.date} ${a.r}位</title></circle>`
-  ).join("");
+  const dots = apps.map((a) => {
+    const cx = x(idxOf[a.date]).toFixed(1), cy = y(a.r).toFixed(1);
+    return `<circle cx="${cx}" cy="${cy}" r="8" class="g-hit" data-date="${esc(a.date)}" data-label="${a.r}位"></circle>` +
+      `<circle cx="${cx}" cy="${cy}" r="${a.r === bestR ? 4.5 : 3}" class="g-dot${a.r === bestR ? " g-best" : ""}"></circle>`;
+  }).join("");
   const xl = `<text x="${padL}" y="${H - 6}" class="g-lbl">${dates[0].slice(5)}</text>` +
     `<text x="${W - padR}" y="${H - 6}" class="g-lbl" text-anchor="end">${dates[N - 1].slice(5)}</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" class="rank-chart">${guides}${line}${dots}${xl}</svg>`;
+}
+
+// グラフ内の点をクリック／ホバーすると日付と数値をツールチップ表示する。
+function attachChartTooltip(container) {
+  if (!container) return;
+  let tip = container.querySelector(".chart-tip");
+  if (!tip) {
+    tip = document.createElement("div");
+    tip.className = "chart-tip";
+    container.appendChild(tip);
+  }
+  const svg = container.querySelector("svg.rank-chart");
+  if (!svg) return;
+  const vb = svg.viewBox.baseVal;
+  let activeHit = null;
+  const showTip = (hit) => {
+    const rect = container.getBoundingClientRect();
+    const svgRect = svg.getBoundingClientRect();
+    const scaleX = svgRect.width / vb.width, scaleY = svgRect.height / vb.height;
+    const cx = parseFloat(hit.getAttribute("cx")), cy = parseFloat(hit.getAttribute("cy"));
+    const left = (svgRect.left - rect.left) + cx * scaleX;
+    const top = (svgRect.top - rect.top) + cy * scaleY;
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+    tip.textContent = `${hit.dataset.date.slice(5)}・${hit.dataset.label}`;
+    tip.classList.add("show");
+    if (activeHit && activeHit !== hit) activeHit.classList.remove("is-active");
+    hit.classList.add("is-active");
+    activeHit = hit;
+  };
+  const hideTip = () => {
+    tip.classList.remove("show");
+    if (activeHit) activeHit.classList.remove("is-active");
+    activeHit = null;
+  };
+  container.addEventListener("pointerover", (e) => {
+    const hit = e.target.closest(".g-hit");
+    if (hit) showTip(hit);
+  });
+  container.addEventListener("pointerout", (e) => {
+    const hit = e.target.closest(".g-hit");
+    if (hit && !e.relatedTarget?.closest(".g-hit")) hideTip();
+  });
+  container.addEventListener("click", (e) => {
+    const hit = e.target.closest(".g-hit");
+    if (!hit) { hideTip(); return; }
+    if (activeHit === hit) hideTip(); else showTip(hit);
+  });
 }
 
 // 各ホスト自身の日次データがこの日数たまるまで推移グラフは出さない（蓄積中は非表示）。
@@ -1276,6 +1328,7 @@ function renderSubsChart(host) {
     const diff = points[points.length - 1][1] - points[0][1];
     $("#dmSubsSub").textContent = `（${points.length}点・${diff >= 0 ? "+" : ""}${diff.toLocaleString("ja-JP")}）`;
     $("#dmSubsChart").innerHTML = buildSubsChart(points);
+    attachChartTooltip($("#dmSubsChart"));
   });
 }
 
@@ -1317,6 +1370,7 @@ async function openDetail(host, opts = {}) {
   const bestR = Math.min(...apps.map((a) => a.r));
   $("#dmChartSub").textContent = `（${apps.length}回登場・最高${bestR}位）`;
   $("#dmChart").innerHTML = buildRankChart(apps);
+  attachChartTooltip($("#dmChart"));
   const desc = apps.slice().reverse().slice(0, 40);
   $("#dmHistory").innerHTML = desc.map((a) =>
     `<a class="dm-h-row" href="${esc(a.u)}" target="_blank" rel="noopener">` +
