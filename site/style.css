@@ -512,7 +512,7 @@ body.modal-open { overflow: hidden; }
 .dm-loading { text-align: center; color: var(--ink-3); font-size: .82rem; padding: 30px 0; }
 .rank-chart { width: 100%; height: auto; display: block; }
 .rank-chart .g-grid { stroke: #e3dccd; stroke-width: 1; stroke-dasharray: 3 3; }
-.rank-chart .g-lbl { fill: #a89e8d; font-size: 11px; font-family: var(--font-num); }
+.rank-chart .g-lbl { fill: #8a8174; font-size: 13px; font-weight: 700; font-family: var(--font-ui); }
 .rank-chart .g-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .rank-chart .g-dot { fill: #fff; stroke: var(--accent); stroke-width: 1.6; pointer-events: none; }
 .rank-chart .g-best { fill: var(--gold); stroke: #a9781f; }
@@ -521,8 +521,8 @@ body.modal-open { overflow: hidden; }
 .rank-chart .g-hit:hover + .g-dot { stroke-width: 2.4; }
 .chart-tip {
   position: absolute; top: 0; left: 0; transform: translate(-50%, -100%);
-  background: var(--ink); color: #fff; font-size: .74rem; font-family: var(--font-num);
-  padding: 4px 8px; border-radius: 7px; white-space: nowrap; pointer-events: none;
+  background: var(--ink); color: #fff; font-size: .82rem; font-weight: 700; font-family: var(--font-ui);
+  padding: 5px 9px; border-radius: 7px; white-space: nowrap; pointer-events: none;
   opacity: 0; visibility: hidden; transition: opacity .1s ease; z-index: 5;
   margin-top: -8px;
 }
