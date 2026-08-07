@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Substack番付 つみあげウォッチ</title>
+<meta name="description" content="Substack番付の日々のTOP30を“つみあげ”集計。発行元（書き手）別ランキングで、継続的に伸びている人が一目で分かる非公式スタッツサイト。">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#f0640f">
+<meta property="og:title" content="Substack番付 つみあげウォッチ">
+<meta property="og:description" content="Substack番付の日々のTOP30を“つみあげ”集計。続けて伸びている書き手が一目で分かる非公式スタッツ。">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://ruku-practice.github.io/substack-banzuke-watch/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://ruku-practice.github.io/substack-banzuke-watch/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Substack番付 つみあげウォッチ">
+<meta name="twitter:description" content="Substack番付の日々のTOP30を“つみあげ”集計。続けて伸びている書き手が一目で分かる非公式スタッツ。">
+<meta name="twitter:image" content="https://ruku-practice.github.io/substack-banzuke-watch/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Zen+Old+Mincho:wght@600;700;900&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=20260626-4">
+</head>
+<body>
+<header class="hero">
+  <div class="wrap hero-inner">
+    <p class="kicker">SUBSTACK BANZUKE · 非公式スタッツ</p>
+    <div class="hero-brand">
+      <img class="hero-icon" src="icon.png" alt="" width="76" height="76">
+      <h1 class="hero-title">Substack番付<span class="accent">つみあげウォッチ</span></h1>
+    </div>
+    <p class="hero-lead">番付の“その日”を、“つみあげ”で。<a href="https://substackbanzuke.com/" target="_blank" rel="noopener">Substack番付</a>の日々のTOP30を累積し、<b>続けて伸びている書き手</b>を発行元別に見える化します。</p>
+    <ul class="pitch">
+      <li><span class="pitch-ic">✍️</span><span><b>書く人へ</b>自分や憧れの書き手が、通算でどれだけ上位常連かが分かる</span></li>
+      <li><span class="pitch-ic">🔍</span><span><b>読む人へ</b>継続的に良い記事を出している書き手を見つけてフォローできる</span></li>
+    </ul>
+    <div class="meta-bar" id="metaBar"></div>
+    <a class="score-guide-link" href="#scoreGuide">📐 つみあげスコアの計算方法</a>
+  </div>
+</header>
+
+<main class="wrap">
+  <nav class="tabs" id="viewTabs">
+    <button class="tab is-active" data-view="ranking">
+      <span class="tab-no">壱</span>
+      <span class="tab-ic" aria-hidden="true">
+        <svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M2 7.5h12M5 3v10M10.5 3v10"/></svg>
+      </span>
+      <span>発行元ランキング</span>
+    </button>
+    <button class="tab" data-view="trends">
+      <span class="tab-no">弐</span>
+      <span class="tab-ic" aria-hidden="true">
+        <svg viewBox="0 0 16 16"><path d="M2 12.5h12"/><path d="M3 11l3-3 2.2 1.8L13 5"/><path d="M13 5v4"/><path d="M13 5h-4"/></svg>
+      </span>
+      <span>番付トレンド</span>
+    </button>
+    <button class="tab" data-view="daily">
+      <span class="tab-no">参</span>
+      <span class="tab-ic" aria-hidden="true">
+        <svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6h12M5 2v3M11 2v3"/></svg>
+      </span>
+      <span>日別TOP30</span>
+    </button>
+    <button class="tab" data-view="risers">
+      <span class="tab-no">四</span>
+      <span class="tab-ic" aria-hidden="true">
+        <svg viewBox="0 0 16 16"><path d="M2 12.5h12"/><path d="M4 10l3-3 2.2 1.8L12 5"/><path d="M12 5v4"/><path d="M12 5h-4"/></svg>
+      </span>
+      <span>急上昇</span>
+    </button>
+    <button class="tab" data-view="newcomers">
+      <span class="tab-no">五</span>
+      <span class="tab-ic" aria-hidden="true">
+        <svg viewBox="0 0 16 16"><path d="M8 2.3l1.7 3.45 3.8.55-2.75 2.68.65 3.78L8 10.95 4.6 12.76l.65-3.78L2.5 6.3l3.8-.55z"/></svg>
+      </span>
+      <span>初登場</span>
+    </button>
+  </nav>
+
+  <!-- ランキングビュー -->
+  <section id="rankingView">
+    <div class="controls">
+      <div class="period-tabs" id="periodTabs"></div>
+      <div class="search-wrap">
+        <input type="search" id="searchBox" placeholder="発行元を検索…" autocomplete="off">
+      </div>
+      <button class="export-btn" id="csvExport" type="button">CSV</button>
+    </div>
+    <p class="period-note" id="periodNote"></p>
+    <div class="score-panel" id="scorePanel" hidden></div>
+    <div class="table-scroll">
+      <table class="rank-table" id="rankTable">
+        <thead>
+          <tr>
+            <th class="col-idx">#</th>
+            <th class="col-avatar" aria-label="アイコン"></th>
+            <th class="col-name">発行元</th>
+            <th class="col-action">詳細</th>
+            <th class="num" data-sort="days">登場<br>日数</th>
+            <th class="num" data-sort="top1">1位</th>
+            <th class="num" data-sort="top3">Top3</th>
+            <th class="num" data-sort="top10">Top10</th>
+            <th class="num" data-sort="avg_rank">平均<br>順位</th>
+            <th class="num" data-sort="avg_attention">平均<br>注目度</th>
+            <th class="num" data-sort="avg_likes">平均<br>❤️</th>
+            <th class="num" data-sort="avg_restacks">平均<br>Restack</th>
+            <th class="num" data-sort="avg_comments">平均<br>コメント</th>
+            <th class="num col-score" data-sort="score">つみあげ<br>スコア</th>
+            <th class="num col-subs" data-sort="subscribers" title="Substackの購読者数（概数・参考値）">購読者数<br><small>(参考)</small></th>
+          </tr>
+        </thead>
+        <tbody id="rankBody"></tbody>
+      </table>
+    </div>
+    <p class="empty-note" id="emptyNote" hidden>該当する発行元がありません。</p>
+  </section>
+
+  <!-- トレンドビュー -->
+  <section id="trendsView" hidden>
+    <div class="controls">
+      <div class="period-tabs" id="periodTabsTrends"></div>
+    </div>
+    <p class="period-note" id="trendNote"></p>
+    <div class="trend-grid">
+      <div class="card">
+        <h3>上位の平均注目度</h3>
+        <p class="card-note">注目度＝番付の総合スコア（♥・Restack・コメント等から算出）。番付の上位ほど高くなる傾向です。</p>
+        <div class="stat-cards" id="statCards"></div>
+      </div>
+      <div class="card">
+        <h3>順位帯別 平均指標</h3>
+        <p class="card-note">順位帯ごとの平均値。上位ほど♥やRestackが伸びています。</p>
+        <div class="table-scroll">
+          <table class="rank-table compact" id="bandTable"></table>
+        </div>
+      </div>
+      <div class="card">
+        <h3>カテゴリ別ランキング（Top10入り回数順）</h3>
+        <p class="card-note">どのジャンルの記事が番付上位に多いか。</p>
+        <div class="table-scroll">
+          <table class="rank-table compact" id="catTable"></table>
+        </div>
+      </div>
+      <div class="card">
+        <h3>発行元比較</h3>
+        <p class="card-note">2つの発行元を選ぶと、順位推移と主要指標を並べて見比べられます。</p>
+        <div class="compare-controls">
+          <select id="compareA" aria-label="比較対象A"></select>
+          <select id="compareB" aria-label="比較対象B"></select>
+        </div>
+        <div class="compare-summary" id="compareSummary"></div>
+        <div class="table-scroll">
+          <table class="rank-table compact" id="compareTable"></table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 日別TOP30ビュー -->
+  <section id="dailyView" hidden>
+    <div class="controls">
+      <div class="daily-nav">
+        <button class="day-arrow" id="dayPrev" aria-label="前の日">‹</button>
+        <select class="month-select day-select" id="daySelect" aria-label="日付を選ぶ"></select>
+        <button class="day-arrow" id="dayNext" aria-label="次の日">›</button>
+      </div>
+      <p class="period-note" id="dailyNote" style="margin:0"></p>
+    </div>
+    <div class="table-scroll">
+      <table class="rank-table" id="dailyTable">
+        <thead>
+          <tr>
+            <th class="col-idx">#</th>
+            <th class="col-avatar" aria-label="アイコン"></th>
+            <th class="col-name">発行元・記事</th>
+            <th class="num">注目度</th>
+            <th class="num">❤️</th>
+            <th class="num">Restack</th>
+            <th class="num">コメント</th>
+            <th class="num col-subs" title="Substackの購読者数（概数・参考値）">購読者数<br><small>(参考)</small></th>
+          </tr>
+        </thead>
+        <tbody id="dailyBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 急上昇ビュー -->
+  <section id="riserView" hidden>
+    <div class="controls">
+      <div class="period-tabs" id="periodTabsRisers"></div>
+      <div class="search-wrap">
+        <input type="search" id="riserSearchBox" placeholder="発行元を検索…" autocomplete="off">
+      </div>
+    </div>
+    <p class="period-note" id="riserNote"></p>
+    <div class="table-scroll">
+      <table class="rank-table" id="riserTable"></table>
+    </div>
+  </section>
+
+  <!-- 初登場ビュー -->
+  <section id="newcomerView" hidden>
+    <div class="controls">
+      <div class="period-tabs" id="periodTabsNewcomers"></div>
+      <div class="search-wrap">
+        <input type="search" id="newcomerSearchBox" placeholder="発行元を検索…" autocomplete="off">
+      </div>
+    </div>
+    <p class="period-note" id="newcomerNote"></p>
+    <div class="table-scroll">
+      <table class="rank-table" id="newcomerTable"></table>
+    </div>
+  </section>
+
+  <section class="score-guide" id="scoreGuide">
+    <div class="guide-card">
+      <h2>つみあげスコアの計算方法</h2>
+      <p class="guide-lead">つみあげスコアは、<b>Top10回数の相対順位・登場継続率・平均順位</b>を合わせた、<b>日々の好成績の"つみあげ"</b>を点数化した独自指標です（Substack番付の公式指標ではありません）。見た目の勢いより、<b>継続して上位に残る強さ</b>を重く見ています。</p>
+      <div class="guide-formula">
+        <code>score = round( 45 + pct × 25 + continuity × 18 + rankPower × 12 )</code>
+      </div>
+      <ul class="guide-points">
+        <li><b>pct（Top10回数の相対順位）</b>：その期間で、他の発行元に比べてどれだけTop10入りしているか。</li>
+        <li><b>continuity（継続率）</b>：登場日数 ÷ その期間の日数。</li>
+        <li><b>rankPower（平均順位係数）</b>：max(0, (31 − 平均順位) ÷ 30)。平均順位が良いほど加点。</li>
+        <li><b>スコア順位</b>：同じ期間の発行元を、つみあげスコアで並べた順位です。</li>
+        <li><b>称号</b>：80+＝横綱級／72+＝大関級／65+＝関脇級／58+＝小結級／52+＝前頭級／48+＝十両級／48未満＝幕下級。</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<!-- 発行元 詳細モーダル -->
+<div class="modal-backdrop" id="detailModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dmName">
+    <button class="modal-close" id="dmClose" aria-label="閉じる">×</button>
+    <div class="dm-head">
+      <img class="dm-avatar" id="dmAvatar" alt="">
+      <div class="dm-head-text">
+        <a class="dm-name" id="dmName" href="#" target="_blank" rel="noopener"></a>
+        <span class="dm-host" id="dmHost"></span>
+      </div>
+    </div>
+    <div class="dm-actions">
+      <button class="dm-share-btn dm-share-primary" id="copyImage" type="button">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="6" cy="7" r="1.3"/><path d="M3 12l3.5-3 2.5 2 2-1.5L13 12"/></svg>
+        <span>画像をコピー</span>
+      </button>
+      <button class="dm-share-btn" id="shareX" type="button">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10"/><path d="M13 3L3 13"/></svg>
+        <span>Xで共有</span>
+      </button>
+      <button class="dm-share-btn" id="shareNotes" type="button">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3h8l2 2v8H3z"/><path d="M5 6h6"/><path d="M5 8.5h6"/><path d="M5 11h4"/></svg>
+        <span>Notes用にコピー</span>
+      </button>
+      <button class="dm-share-btn" id="copyDetailUrl" type="button">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 5H4.5A1.5 1.5 0 003 6.5v6A1.5 1.5 0 004.5 14h6A1.5 1.5 0 0012 12.5V11"/><path d="M9 2h4v4"/><path d="M13 2L7 8"/></svg>
+        <span>URLをコピー</span>
+      </button>
+    </div>
+    <div class="dm-stats" id="dmStats"></div>
+    <div class="dm-score" id="dmScore"></div>
+    <div class="dm-chart-wrap">
+      <div class="dm-chart-title">番付内 順位の推移 <span id="dmChartSub"></span></div>
+      <div class="dm-chart" id="dmChart"></div>
+    </div>
+    <div class="dm-chart-wrap" id="dmSubsWrap" hidden>
+      <div class="dm-chart-title">購読者数の推移 <span id="dmSubsSub"></span></div>
+      <div class="dm-chart" id="dmSubsChart"></div>
+    </div>
+    <div class="dm-history-wrap">
+      <div class="dm-chart-title">登場した記事（新しい順）</div>
+      <div class="dm-history" id="dmHistory"></div>
+    </div>
+  </div>
+</div>
+
+<!-- スクロール時に追従するテーブルヘッダー（JSで内容を生成） -->
+<div id="stickyHead" class="sticky-head" hidden><div class="sticky-inner"></div></div>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <a class="creator" href="https://rukupractice.substack.com/" target="_blank" rel="noopener">
+      <img class="creator-icon" src="" id="creatorIcon" alt="" loading="lazy" decoding="async">
+      <span class="creator-text">
+        <span class="creator-label">制作者</span>
+        <span class="creator-name">ルク｜踊り場からの再起動日記</span>
+        <span class="creator-sub">rukupractice.substack.com →</span>
+      </span>
+    </a>
+    <p>データ出典：<a id="srcLink" href="https://substackbanzuke.com/" target="_blank" rel="noopener">Substack番付（substackbanzuke.com）</a></p>
+    <p><a href="#scoreGuide">つみあげスコアの計算方法</a></p>
+    <p class="disclaimer">本サイトは Substack番付 のデータを個人が集計した<b>非公式</b>のスタッツサイトです。各発行元名はそれぞれのSubstackへのリンクです。</p>
+    <p class="gen" id="genAt"></p>
+  </div>
+</footer>
+
+<script src="app.js?v=20260626-4"></script>
+</body>
+</html>
