@@ -5,3 +5,6 @@ __pycache__/
 # 発行元OGP（CIで生成・Pages配信のみ）
 site/cards/
 site/p/
+
+# 内部メモ（公開しない）
+progress.md

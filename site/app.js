@@ -1371,13 +1371,32 @@ async function openDetail(host, opts = {}) {
   $("#dmChartSub").textContent = `（${apps.length}回登場・最高${bestR}位）`;
   $("#dmChart").innerHTML = buildRankChart(apps);
   attachChartTooltip($("#dmChart"));
-  const desc = apps.slice().reverse().slice(0, 40);
-  $("#dmHistory").innerHTML = desc.map((a) =>
-    `<a class="dm-h-row" href="${esc(a.u)}" target="_blank" rel="noopener">` +
+  renderHistory(apps.slice().reverse());
+}
+
+const HISTORY_PAGE = 40;
+function historyRow(a) {
+  return `<a class="dm-h-row" href="${esc(a.u)}" target="_blank" rel="noopener">` +
     `<span class="dm-h-rank medal-${a.r <= 3 ? a.r : "x"}">${a.r}位</span>` +
     `<span class="dm-h-title">${esc(a.t || "(無題)")}</span>` +
-    `<span class="dm-h-meta">${a.date.slice(5)}・注目度${a.a}</span></a>`
-  ).join("");
+    `<span class="dm-h-meta">${a.date.slice(5)}・注目度${a.a}</span></a>`;
+}
+function renderHistory(desc) {
+  const box = $("#dmHistory");
+  let shown = Math.min(HISTORY_PAGE, desc.length);
+  const moreHtml = () => desc.length > shown
+    ? `<button class="dm-more-btn" id="dmHistoryMore" type="button">もっと見る（残り${desc.length - shown}件）</button>`
+    : "";
+  box.innerHTML = desc.slice(0, shown).map(historyRow).join("") + moreHtml();
+  box.onclick = (ev) => {
+    const btn = ev.target.closest("#dmHistoryMore");
+    if (!btn) return;
+    const next = desc.slice(shown, shown + HISTORY_PAGE);
+    shown += next.length;
+    btn.insertAdjacentHTML("beforebegin", next.map(historyRow).join(""));
+    if (shown >= desc.length) btn.remove();
+    else btn.textContent = `もっと見る（残り${desc.length - shown}件）`;
+  };
 }
 
 /* ── 日別TOP30ビュー ─────────────────────────────────── */

@@ -537,6 +537,12 @@ body.modal-open { overflow: hidden; }
   padding: 9px 8px; border-radius: 9px; text-decoration: none; color: var(--ink);
 }
 .dm-h-row:hover { background: var(--paper-2); }
+.dm-more-btn {
+  display: block; width: 100%; margin-top: 6px; padding: 9px 8px;
+  border: 1px solid var(--line-2); border-radius: 9px; background: var(--paper-2);
+  color: var(--ink-2); font-size: .85rem; cursor: pointer;
+}
+.dm-more-btn:hover { border-color: var(--accent); color: var(--accent-2); }
 .dm-h-rank {
   font-family: var(--font-num); font-weight: 600; font-size: .82rem; text-align: center;
   padding: 3px 0; border-radius: 7px; background: var(--line-2); color: var(--ink-2);
