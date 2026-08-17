@@ -1,0 +1,5 @@
+# 00_products/apps/banzuke-highrankers/scripts/ が使う外部ライブラリ
+# 2026-07-12 開発部が実行環境（Anaconda base env, python3.9.16）から実測して生成。
+# 他のscripts/*.pyは標準ライブラリのみ（urllib/csv/re等）で完結。
+
+Pillow==10.1.0

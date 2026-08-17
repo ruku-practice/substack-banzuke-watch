@@ -36,3 +36,15 @@ python3 -m http.server -d site 8000  # http://localhost:8000 で確認
 
 データ提供：[Substack番付（substackbanzuke.com）](https://substackbanzuke.com/)。
 本サイトはそのデータを個人が集計した **非公式** のスタッツサイトです。
+
+## Python環境構築（ローカル）
+
+本番（Cloud Run Job）は `python:3.12-slim`。ローカルで動かす場合は venv を推奨：
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+※2026-07-12 開発部が `scripts/make_publisher_pages.py` / `make_og.py` の依存（Pillow）から
+`requirements.txt` を新規作成（非破壊・既存ファイルなし）。他のscriptsは標準ライブラリのみ。
