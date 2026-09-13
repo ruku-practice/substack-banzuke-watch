@@ -26,6 +26,11 @@ DAILY_PATH = os.path.normpath(os.path.join(HERE, "..", "site", "daily.json"))
 SITE_NAME = "Substack番付 つみあげウォッチ"
 RUKU_HOST = "rukupractice.substack.com"
 
+# 元サイトは 2026-09-06〜07 の改修でカテゴリ表示を廃止した（ページにもAPIにも無い）。
+# この日以降でカテゴリが空の行は「未設定」ではなく「欠測」＝ None として扱い、カテゴリ集計に混ぜない。
+# 元サイトがカテゴリを再開すれば、その行は値を持つので自動で集計に戻る。
+CATEGORY_UNAVAILABLE_SINCE = "2026-09-06"
+
 LOGOS = {}
 
 
@@ -61,6 +66,9 @@ def load_rows():
         if not d or rank <= 0:
             continue
         host = host_of(url)
+        category = (r.get("category") or "").strip()
+        if not category and d >= CATEGORY_UNAVAILABLE_SINCE:
+            category = None
         out.append({
             "date": d,
             "rank": rank,
@@ -74,7 +82,7 @@ def load_rows():
             "likes": to_int(r.get("likes")),
             "restacks": to_int(r.get("restacks")),
             "comments": to_int(r.get("comments")),
-            "category": (r.get("category") or "").strip(),
+            "category": category,
         })
     return out
 
@@ -86,7 +94,7 @@ def aggregate_publishers(rows):
         "rank_sum": 0, "best_rank": 99, "att_sum": 0,
         "likes": 0, "restacks": 0, "comments": 0,
         "latest_date": "", "first_date": "", "name": "", "host": "", "url": "",
-        "category_counts": defaultdict(int),
+        "category_counts": defaultdict(int), "category_known": 0,
     })
     for r in rows:
         s = g[r["key"]]
@@ -105,6 +113,8 @@ def aggregate_publishers(rows):
         s["likes"] += r["likes"]
         s["restacks"] += r["restacks"]
         s["comments"] += r["comments"]
+        if r["category"] is not None:
+            s["category_known"] += 1
         if r["category"]:
             s["category_counts"][r["category"]] += 1
         if not s["first_date"] or r["date"] < s["first_date"]:
@@ -122,6 +132,8 @@ def aggregate_publishers(rows):
         cat = ""
         if s["category_counts"]:
             cat = sorted(s["category_counts"].items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
+        elif not s["category_known"]:
+            cat = None  # 期間内の登場がすべてカテゴリ欠測の日
         out.append({
             "name": s["name"] or key,
             "host": s["host"],
@@ -160,6 +172,7 @@ def period_payload(key, label, rows):
         "trends": {
             **compute_trends(rows),
             "categories": category_stats(rows),
+            "category_missing": sum(1 for r in rows if r["category"] is None),
         },
     }
 
@@ -214,6 +227,8 @@ def compute_trends(rows):
 def category_stats(rows):
     g = defaultdict(lambda: {"entries": 0, "att": 0, "top10": 0, "top3": 0})
     for r in rows:
+        if r["category"] is None:
+            continue  # 欠測の行は「未設定」に数えない
         c = r["category"] or "（カテゴリ未設定）"
         s = g[c]
         s["entries"] += 1
@@ -291,6 +306,7 @@ def main():
         "logo_count": sum(1 for v in LOGOS.values() if v),
         "logos": {h: u for h, u in LOGOS.items() if u},
         "subscribers": subscribers,  # {host: "11K+"} 購読者数の概数（参考値・公開分のみ）
+        "notes": {"category_unavailable_since": CATEGORY_UNAVAILABLE_SINCE},
         "periods": periods,
     }
 
@@ -306,7 +322,7 @@ def main():
         days.setdefault(r["date"], []).append({
             "r": r["rank"], "h": r["host"], "n": r["publisher"], "u": r["url"],
             "t": r["title"], "a": r["attention"], "l": r["likes"],
-            "rs": r["restacks"], "c": r["comments"], "cat": r["category"],
+            "rs": r["restacks"], "c": r["comments"], "cat": r["category"],  # None=欠測
         })
     for d in days:
         days[d].sort(key=lambda e: e["r"])

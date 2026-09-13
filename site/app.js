@@ -10,6 +10,10 @@ let selectedCategory = null;
 let activePeriodKey = "last30";
 let customPeriod = null;
 let customRange = null;
+// カテゴリ: "" = 元サイトで未設定 ／ null = 欠測（2026-09-06以降、元サイトがカテゴリを表示しなくなった日）
+const CAT_UNSET = "（カテゴリ未設定）", CAT_MISSING = "（カテゴリ欠測）";
+const dayIndex = (s) => Math.round(Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) / 86400000);
+const dayLabel = (i) => { const d = new Date(i * 86400000); return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`; };
 let activeView = "ranking";
 let sortKey = "top10";
 let sortDir = "desc"; // desc | asc
@@ -229,7 +233,7 @@ function aggregateFromDailyRows(rows) {
   for (const e of rows) {
     const key = e.h || e.n;
     let s = g.get(key);
-    if (!s) { s = { dates: new Set(), app: 0, top1: 0, top3: 0, top10: 0, rankSum: 0, best: 99, att: 0, likes: 0, rs: 0, c: 0, latest: "", first: "", name: "", host: "", url: "", cat: {} }; g.set(key, s); }
+    if (!s) { s = { dates: new Set(), app: 0, top1: 0, top3: 0, top10: 0, rankSum: 0, best: 99, att: 0, likes: 0, rs: 0, c: 0, latest: "", first: "", name: "", host: "", url: "", cat: {}, catKnown: 0 }; g.set(key, s); }
     s.dates.add(e.date); s.app++;
     const rk = e.r;
     if (rk === 1) s.top1++;
@@ -237,6 +241,7 @@ function aggregateFromDailyRows(rows) {
     if (rk <= 10) s.top10++;
     s.rankSum += rk; if (rk < s.best) s.best = rk;
     s.att += e.a; s.likes += e.l; s.rs += e.rs; s.c += e.c;
+    if (e.cat !== null) s.catKnown++;
     if (e.cat) s.cat[e.cat] = (s.cat[e.cat] || 0) + 1;
     if (!s.first || e.date < s.first) s.first = e.date;
     if (e.date >= s.latest) { s.latest = e.date; s.name = e.n; s.host = e.h; s.url = e.h ? ("https://" + e.h + "/") : e.u; }
@@ -249,7 +254,7 @@ function aggregateFromDailyRows(rows) {
     for (const [k, v] of Object.entries(s.cat)) { if (v > bestCnt || (v === bestCnt && k < cat)) { bestCnt = v; cat = k; } }
     out.push({
       name: s.name || key, host: s.host, url: s.url, days: s.dates.size, appearances: n,
-      first_date: s.first || null, category: cat,
+      first_date: s.first || null, category: s.catKnown ? cat : null,  // null=期間内すべてカテゴリ欠測
       top1: s.top1, top3: s.top3, top10: s.top10,
       avg_rank: n ? r1(s.rankSum / n) : 0, best_rank: s.best !== 99 ? s.best : null,
       avg_attention: n ? r1(s.att / n) : 0, avg_likes: n ? r1(s.likes / n) : 0,
@@ -275,14 +280,16 @@ function trendsFromDailyRows(rows) {
   const attBy = (pred) => { const sub = rows.filter((e) => pred(e.r)); return sub.length ? r1(sub.reduce((s, e) => s + e.a, 0) / sub.length) : 0; };
   const summary = { avg_att_rank1: attBy((r) => r === 1), avg_att_top3: attBy((r) => r <= 3), avg_att_top10: attBy((r) => r <= 10), avg_att_all: attBy(() => true) };
   const cg = new Map();
+  let categoryMissing = 0;
   for (const e of rows) {
-    const k = e.cat || "（カテゴリ未設定）";
+    if (e.cat === null) { categoryMissing++; continue; }  // 欠測（元サイトがカテゴリ非公開の日）は「未設定」に数えない
+    const k = e.cat || CAT_UNSET;
     let s = cg.get(k); if (!s) { s = { entries: 0, att: 0, top10: 0, top3: 0 }; cg.set(k, s); }
     s.entries++; s.att += e.a; if (e.r <= 10) s.top10++; if (e.r <= 3) s.top3++;
   }
   const categories = [...cg].map(([category, s]) => ({ category, entries: s.entries, top10: s.top10, top3: s.top3, avg_attention: s.entries ? r1(s.att / s.entries) : 0 }))
     .sort((a, b) => (b.top10 - a.top10) || (b.entries - a.entries));
-  return { summary, bands, categories };
+  return { summary, bands, categories, category_missing: categoryMissing };
 }
 
 function buildCustomPeriod(start, end) {
@@ -680,6 +687,19 @@ function renderTrends() {
     "<tbody>" + cats.map((c) =>
       `<tr><td style="text-align:left">${esc(c.category)}</td><td>${c.top10}</td><td>${c.top3}</td><td>${c.entries}</td><td>${c.avg_attention}</td></tr>`
     ).join("") + "</tbody>";
+  let catNote = $("#catNote");
+  if (!catNote) {
+    catNote = document.createElement("p");
+    catNote.id = "catNote";
+    catNote.className = "cat-note";
+    $("#catTable").parentElement.insertAdjacentElement("afterend", catNote);
+  }
+  const catMissing = t.category_missing || 0;
+  const catSince = dayLabel(dayIndex((DATA.notes && DATA.notes.category_unavailable_since) || "2026-09-06"));
+  catNote.hidden = !catMissing;
+  catNote.textContent = catMissing
+    ? `※ ${catSince}以降は元サイトがカテゴリを表示していないため、この期間の${catMissing}件はカテゴリ集計に含めていません（欠測）。`
+    : "";
 
   renderCompareSelectors(period);
   renderCompare();
@@ -706,7 +726,7 @@ function compareStat(p, period) {
   return {
     host: p.host,
     name: p.name,
-    category: p.category || "（カテゴリ未設定）",
+    category: p.category === null ? CAT_MISSING : (p.category || CAT_UNSET),
     first_date: p.first_date || "—",
     days: p.days,
     top1: p.top1,
@@ -772,13 +792,13 @@ function renderCategoryDetail(cat) {
     return;
   }
   const pubs = (period.publishers || [])
-    .filter((p) => (p.category || "（カテゴリ未設定）") === key)
+    .filter((p) => p.category !== null && (p.category || CAT_UNSET) === key)
     .sort((a, b) => (b.top10 - a.top10) || (a.avg_rank - b.avg_rank) || tieBreak(a, b))
     .slice(0, 8);
   const entries = [];
   if (DAILY && DAILY.dates) {
     DAILY.dates.forEach((d) => (DAILY.days[d] || []).forEach((e) => {
-      if ((e.cat || "（カテゴリ未設定）") === key) entries.push({ date: d, ...e });
+      if (e.cat !== null && (e.cat || CAT_UNSET) === key) entries.push({ date: d, ...e });
     }));
   }
   entries.sort((a, b) => b.date.localeCompare(a.date) || a.r - b.r);
@@ -1217,21 +1237,36 @@ async function copyShareImage() {
 }
 
 // 購読者数の推移グラフ。points=[[date,num],...] 昇順。値はバケット(11K等)のため階段状になりがち。
+// 横軸は日付の実間隔。取れなかった日（欠測）は線をつながず、帯と「欠測」ラベルで示す（直線でならして見せない）。
 function buildSubsChart(points) {
   const W = 640, H = 200, padL = 50, padR = 14, padT = 16, padB = 24;
   const innerW = W - padL - padR, innerH = H - padT - padB, N = points.length;
   const nums = points.map((p) => p[1]);
   let lo = Math.min(...nums), hi = Math.max(...nums);
   if (lo === hi) { lo = lo * 0.97; hi = hi * 1.03 + 1; }
-  const x = (i) => padL + (N <= 1 ? innerW / 2 : (i / (N - 1)) * innerW);
+  const days = points.map((p) => dayIndex(p[0]));
+  const span = days[N - 1] - days[0];
+  const xd = (day) => padL + (span <= 0 ? innerW / 2 : ((day - days[0]) / span) * innerW);
+  const x = (i) => xd(days[i]);
   const y = (v) => padT + (1 - (v - lo) / (hi - lo)) * innerH;
   const fmt = (v) => v >= 10000 ? (v / 1000).toFixed(0) + "K" : v >= 1000 ? (v / 1000).toFixed(1) + "K" : String(Math.round(v));
   const guides = [hi, lo].map((v) =>
     `<line x1="${padL}" y1="${y(v).toFixed(1)}" x2="${W - padR}" y2="${y(v).toFixed(1)}" class="g-grid"/>` +
     `<text x="${padL - 5}" y="${(y(v) + 3).toFixed(1)}" class="g-lbl" text-anchor="end">${fmt(v)}</text>`
   ).join("");
-  const pts = points.map((p, i) => `${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`).join(" ");
-  const line = N > 1 ? `<polyline points="${pts}" class="g-line"/>` : "";
+  const segments = [[]];
+  let gaps = "";
+  points.forEach((p, i) => {
+    if (i && days[i] - days[i - 1] > 1) {
+      segments.push([]);
+      const gx = xd(days[i - 1] + 0.5), gw = xd(days[i] - 0.5) - gx;
+      const range = days[i] - days[i - 1] === 2 ? dayLabel(days[i - 1] + 1) : `${dayLabel(days[i - 1] + 1)}〜${dayLabel(days[i] - 1)}`;
+      gaps += `<rect x="${gx.toFixed(1)}" y="${padT}" width="${Math.max(gw, 1).toFixed(1)}" height="${innerH}" class="g-gap"><title>${range} 欠測（取得できなかった日）</title></rect>`;
+      if (gw >= 26) gaps += `<text x="${(gx + gw / 2).toFixed(1)}" y="${padT + 13}" class="g-gap-lbl" text-anchor="middle">欠測</text>`;
+    }
+    segments[segments.length - 1].push(`${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`);
+  });
+  const line = gaps + segments.filter((s) => s.length > 1).map((s) => `<polyline points="${s.join(" ")}" class="g-line"/>`).join("");
   const dots = points.map((p, i) => {
     const cx = x(i).toFixed(1), cy = y(p[1]).toFixed(1);
     return `<circle cx="${cx}" cy="${cy}" r="8" class="g-hit" data-date="${esc(p[0])}" data-label="${esc(fmt(p[1]))}"></circle>` +
@@ -1326,7 +1361,8 @@ function renderSubsChart(host) {
     if (points.length < MIN_SUBS_POINTS) { wrap.hidden = true; return; }
     wrap.hidden = false;
     const diff = points[points.length - 1][1] - points[0][1];
-    $("#dmSubsSub").textContent = `（${points.length}点・${diff >= 0 ? "+" : ""}${diff.toLocaleString("ja-JP")}）`;
+    const missingDays = dayIndex(points[points.length - 1][0]) - dayIndex(points[0][0]) + 1 - points.length;
+    $("#dmSubsSub").textContent = `（${points.length}点・${diff >= 0 ? "+" : ""}${diff.toLocaleString("ja-JP")}${missingDays > 0 ? `・欠測${missingDays}日` : ""}）`;
     $("#dmSubsChart").innerHTML = buildSubsChart(points);
     attachChartTooltip($("#dmSubsChart"));
   });

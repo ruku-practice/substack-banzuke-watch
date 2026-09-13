@@ -519,6 +519,10 @@ body.modal-open { overflow: hidden; }
 .rank-chart .g-hit { fill: transparent; cursor: pointer; }
 .rank-chart .g-hit.is-active + .g-dot,
 .rank-chart .g-hit:hover + .g-dot { stroke-width: 2.4; }
+/* 欠測（データが取れなかった日）：線をつながず、帯と「欠測」ラベルで明示する */
+.rank-chart .g-gap { fill: #efe9dd; }
+.rank-chart .g-gap-lbl { fill: #8a8174; font-size: 12px; font-weight: 700; font-family: var(--font-ui); }
+.cat-note { margin: 8px 0 0; font-size: .74rem; color: var(--ink-3); line-height: 1.6; }
 .chart-tip {
   position: absolute; top: 0; left: 0; transform: translate(-50%, -100%);
   background: var(--ink); color: #fff; font-size: .82rem; font-weight: 700; font-family: var(--font-ui);

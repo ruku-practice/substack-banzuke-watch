@@ -15,7 +15,7 @@ import re
 import csv
 import time
 import urllib.request
-from datetime import date
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -102,7 +102,8 @@ def load(path, default):
 def main():
     cur = load(OUT_PATH, {})
     hist = load(HIST_PATH, {})
-    today = date.today().isoformat()
+    # 実行環境のTZに依存させない（GitHub Actions は UTC のため、朝の実行が前日扱いになっていた）
+    today = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=9))).date().isoformat()
 
     hosts = hosts_from_csv()
     # 本日まだ記録していないホストのみ対象（1日1点）

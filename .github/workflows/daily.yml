@@ -6,8 +6,14 @@ on:
     # 通常の 08:10 実行は Google Cloud（Cloud Scheduler 08:10 JST → Cloud Run Job "banzuke-daily"）で行う。
     # GitHubのスケジュールcronはベストエフォートで混雑時は数十分〜数時間遅延するため、
     # この schedule は「Cloud Run が失敗/未実行だった日」の保険として残す。
+    # 2026-09-13: 最後に「鮮度チェック」を毎回走らせ、新しい日が入っていなければ赤くする（見張り役も兼ねる）。
     - cron: "10 23 * * *"
-  workflow_dispatch: {}   # 手動実行
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "本日分が更新済みでも、収集・集計・公開をやり直す"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -24,10 +30,17 @@ jobs:
 
       - name: 本日の更新状況をチェック
         id: check_today
+        env:
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
         run: |
           TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
           echo "本日の日付: $TODAY"
           git fetch origin main
+          if [ "$FORCE" = "true" ]; then
+            echo "already_run=false" >> $GITHUB_OUTPUT
+            echo "force 指定のため、収集・公開をやり直します。"
+            exit 0
+          fi
           LOGS=$(git log origin/main -n 5 --oneline)
           echo "直近のコミットログ:"
           echo "$LOGS"
@@ -47,7 +60,11 @@ jobs:
       - name: 収集・集計
         if: steps.check_today.outputs.already_run != 'true'
         run: |
+          # 取れない日があっても、取れた分と公開までは進める（赤くするのは最後の鮮度チェック）
+          set +e
           python3 scripts/scrape.py
+          echo "scrape.py exit=$?"
+          set -e
           python3 scripts/fetch_logos.py
           python3 scripts/fetch_subscribers.py || true
           python3 scripts/build_site_data.py
@@ -87,3 +104,19 @@ jobs:
           git add -A
           git commit -q -m "deploy (manual fallback) $(TZ=Asia/Tokyo date +%Y-%m-%dT%H:%M)"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" gh-pages
+
+      - name: 鮮度チェック（新しい日が入っていなければ赤）
+        if: always()
+        run: |
+          # ジョブの成否ではなく、main のデータと公開中のサイトの「最新日」で判定する
+          git fetch -q origin main
+          mkdir -p /tmp/fresh
+          git show origin/main:data/banzuke_full.csv > /tmp/fresh/banzuke_full.csv
+          git show origin/main:site/data.json > /tmp/fresh/data.json
+          git show origin/main:data/subscribers_history.json > /tmp/fresh/subscribers_history.json
+          python3 scripts/check_freshness.py \
+            --csv /tmp/fresh/banzuke_full.csv --data /tmp/fresh/data.json \
+            --subs-hist /tmp/fresh/subscribers_history.json
+          python3 scripts/check_freshness.py \
+            --data-url "https://ruku-practice.github.io/substack-banzuke-watch/data.json" \
+            --retries 10 --retry-wait 60
