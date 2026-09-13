@@ -15,14 +15,18 @@ Substack番付（[substackbanzuke.com](https://substackbanzuke.com/)）の日々
 毎朝 GitHub Actions が自動で番付を収集 → 集計 → サイトを更新します（PCの起動は不要）。
 
 ```
-scripts/scrape.py            # substackbanzuke.com から未取得日を収集 → data/banzuke_full.csv
+scripts/scrape.py            # substackbanzuke.com から未取得日（昨日まで）を収集 → data/banzuke_full.csv
 scripts/build_site_data.py   # 集計 → site/data.json
+scripts/check_freshness.py   # 鮮度の見張り：最新日が昨日より古ければ失敗にする
 site/                        # 静的サイト（GitHub Pages で配信）
-.github/workflows/daily.yml  # 毎朝の自動実行（cron）
+.github/workflows/daily.yml  # 毎朝の自動実行（cron）＋最後に鮮度チェック
+tests/                       # 解析の検査（python3 -m unittest discover -s tests）
 ```
 
 - **名寄せ**：発行元はSubstackの **URLホスト** で同一人物として合算（タグライン変更にも追従）。
 - **自己修復**：実行が遅延・スキップされても、未取得日を翌日以降にまとめて取得（バックフィル方式）。
+- **黙って止まらない**：取得できない日が残ると `scrape.py` は終了コード2、ページの形が変わると3で終わり、毎朝のワークフローは最後の鮮度チェックで失敗（赤）になります。
+- **欠測の表示**：取れなかった日の購読者数（後から遡れない）と、2026-09-06 以降のカテゴリ（元サイトが表示を終了）は、0や「未設定」にせず「欠測」として表示します。
 
 ## ローカルで動かす
 
