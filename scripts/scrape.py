@@ -99,9 +99,11 @@ class BanzukeParser(HTMLParser):
                 self._collect_mode = "rank"
                 self._text_buf = ""
             elif tag == "span":
-                if (a.get("class") or "") == "topic-label":
+                classes = (a.get("class") or "").split()
+                if "topic-label" in classes:
                     self._collect_mode = "category"
-                elif self._collect_mode is None and "publisher" not in self._current:
+                # 発行元は class の無い span だけ。「新」「PR」等の飾り span を発行元として拾わない（断 2026-09-13 指摘）
+                elif not classes and self._collect_mode is None and "publisher" not in self._current:
                     self._collect_mode = "publisher"
                 self._text_buf = ""
             elif tag == "a":
@@ -120,7 +122,8 @@ class BanzukeParser(HTMLParser):
         elif tag == "li" and self._in_li:
             self._in_li = False
             cur = self._current
-            if cur.get("url") and cur.get("title") and cur.get("scores_ok"):
+            # 1項目でも欠けた行は採らない→件数不一致で「構造変化」として止まる（空欄で黙って書かない）
+            if cur.get("url") and cur.get("title") and cur.get("publisher") and cur.get("scores_ok"):
                 cur.setdefault("rank", cur["position"])
                 self.entries.append(cur)
             self._current = {}
