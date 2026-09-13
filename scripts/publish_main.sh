@@ -27,8 +27,15 @@ git log --oneline origin/main..HEAD
 [ "$AHEAD" -gt 0 ] || { echo "✓ push するものはありません"; exit 0; }
 
 if [ "$BEHIND" -gt 0 ]; then
-  echo "▶ その間に origin/main へ入った自動更新:"
+  echo "▶ その間に origin/main へ入ったコミット:"
   git log --oneline HEAD..origin/main
+  # 自動更新（データファイルだけ）以外のコミットが混ざっていたら、-X theirs で他人のコード変更を上書きしうるので止まる
+  OTHER=$(git diff --name-only "$(git merge-base HEAD origin/main)" origin/main | grep -vxF -f <(printf '%s\n' "${DATA_FILES[@]}") || true)
+  if [ -n "$OTHER" ]; then
+    echo "✗ origin/main にデータ以外の変更があります。自動では取り込みません（手で rebase して確認してください）:"
+    echo "$OTHER"
+    exit 1
+  fi
   if [ "$EXECUTE" -eq 1 ]; then
     # 自動更新はデータファイルしか触らない。衝突したら手元（取り直し済み）を採用し、増えた日を足してから再集計する。
     git rebase -X theirs origin/main

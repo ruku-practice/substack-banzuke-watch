@@ -80,6 +80,7 @@ class BanzukeParser(HTMLParser):
         self._collect_mode = None
         self._text_buf = ""
         self._next_href = None
+        self._span_depth = 0  # 発行元/カテゴリの span の中にある入れ子 span の深さ
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
@@ -94,18 +95,23 @@ class BanzukeParser(HTMLParser):
             self.li_count += 1
             self._current = {"position": self.li_count}
             self._collect_mode = None
+            self._span_depth = 0
         elif self._in_li:
             if tag == "b" and self._collect_mode is None:
                 self._collect_mode = "rank"
                 self._text_buf = ""
             elif tag == "span":
                 classes = (a.get("class") or "").split()
-                if "topic-label" in classes:
+                # 収集を始めるときだけバッファを空にする。発行元の span の中の入れ子 span（絵文字など）で名前の前半を消さない
+                if "topic-label" in classes and self._collect_mode is None:
                     self._collect_mode = "category"
+                    self._text_buf = ""
                 # 発行元は class の無い span だけ。「新」「PR」等の飾り span を発行元として拾わない（断 2026-09-13 指摘）
                 elif not classes and self._collect_mode is None and "publisher" not in self._current:
                     self._collect_mode = "publisher"
-                self._text_buf = ""
+                    self._text_buf = ""
+                elif self._collect_mode in ("publisher", "category"):
+                    self._span_depth += 1
             elif tag == "a":
                 self._collect_mode = "title"
                 self._next_href = a.get("href", "")
@@ -129,7 +135,9 @@ class BanzukeParser(HTMLParser):
             self._current = {}
             self._collect_mode = None
         elif self._in_li and self._collect_mode:
-            if self._collect_mode == "rank" and tag == "b":
+            if tag == "span" and self._collect_mode in ("publisher", "category") and self._span_depth:
+                self._span_depth -= 1  # 入れ子 span の閉じタグ＝まだ発行元/カテゴリの途中
+            elif self._collect_mode == "rank" and tag == "b":
                 m = re.search(r"(\d+)位", self._text_buf)
                 if m:
                     self._current["rank"] = int(m.group(1))

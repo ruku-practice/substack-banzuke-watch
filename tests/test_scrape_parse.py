@@ -58,6 +58,23 @@ class ParsePageTest(unittest.TestCase):
         self.assertEqual(rows[0]["publisher"], "発行元A")
         self.assertEqual(rows[1]["publisher"], "B")
 
+    def test_nested_span_inside_publisher_keeps_whole_name(self):
+        li = ('<li><a href="https://a.substack.com/p/1">題A</a>'
+              '<span>神島海月<span class="emoji">🪼</span>感性に火をつけるクラゲ</span>'
+              '<small>注目度 89 / ♥ 32 / Restack 12 / コメント 8</small></li>')
+        rows, status, _ = scrape.parse_page(page(li), D)
+        self.assertEqual(status, scrape.OK)
+        self.assertEqual(rows[0]["publisher"], "神島海月🪼感性に火をつけるクラゲ")
+
+    def test_nested_span_inside_old_category_keeps_whole_label(self):
+        li = ('<li><b>1位</b> <span class="topic-label">AI<span class="sep">・</span>ツール</span>'
+              '<a href="https://a.substack.com/p/1">題A</a> <span>発行元: 発行元A</span>'
+              '<small>注目度 89 / ♥ 32 / Restack 12 / コメント 8</small></li>')
+        rows, status, _ = scrape.parse_page(page(li), D)
+        self.assertEqual(status, scrape.OK)
+        self.assertEqual(rows[0]["category"], "AI・ツール")
+        self.assertEqual(rows[0]["publisher"], "発行元A")
+
     def test_page_without_archive_is_not_published(self):
         _, status, _ = scrape.parse_page("<html><h1>日本語Substack人気ランキング</h1></html>", D)
         self.assertEqual(status, scrape.NOT_PUBLISHED)
