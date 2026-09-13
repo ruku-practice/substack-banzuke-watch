@@ -54,6 +54,14 @@ git push origin HEAD:main
 gh workflow run daily.yml -R "$REPO" -f force=true
 sleep 8
 gh run list -R "$REPO" --workflow daily.yml -L 1
-echo "✓ push 済み・Actions 起動済み。10〜20分後に公開サイトへ反映されます"
-echo "  確認: curl -s https://ruku-practice.github.io/substack-banzuke-watch/index.html | grep -o 'app.js?v=[0-9-]*'   → v=20260913-1"
-echo "  確認: gh run watch -R $REPO   （最後の「鮮度チェック」が緑なら合格）"
+echo "✓ push 済み・Actions 起動済み。公開サイトへの反映を待ちます（最大30分）"
+
+# --- 反映の確認：公開中の data.json の最新日と、app.js のキャッシュバスター ---
+SITE="https://ruku-practice.github.io/substack-banzuke-watch"
+python3 scripts/check_freshness.py --data-url "$SITE/data.json" --retries 30 --retry-wait 60 \
+  || { echo "✗ 30分待っても公開サイトの最新日が昨日に届きません。gh run list -R $REPO --workflow daily.yml -L 1 で Actions を確認"; exit 1; }
+echo "▶ 公開中 data.json の date_range:"
+curl -s "$SITE/data.json?t=$(date +%s)" | python3 -c "import json,sys; print(json.load(sys.stdin)['date_range'])"
+echo "▶ 公開中 index.html の app.js 版:"
+curl -s "$SITE/index.html?t=$(date +%s)" | grep -o 'app.js?v=[0-9-]*'
+echo "✓ 公開サイトに反映済み。Actions の最後の「鮮度チェック」が緑かも確認: gh run list -R $REPO --workflow daily.yml -L 1"
